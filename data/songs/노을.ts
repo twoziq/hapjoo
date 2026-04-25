@@ -3,6 +3,7 @@ title: 노을
 artist: 김광석
 key: G
 capo: 0
+bpm: 80
 ---
 
 [G][D][Em][G7]

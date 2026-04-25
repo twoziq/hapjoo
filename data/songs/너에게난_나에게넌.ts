@@ -3,6 +3,7 @@ title: 너에게난 나에게넌
 artist: 자전거탄 풍경
 key: G
 capo: 0
+bpm: 74
 ---
 
 Chorus

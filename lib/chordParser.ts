@@ -3,6 +3,7 @@ export interface SheetMeta {
   artist?: string;
   key?: string;
   capo?: number;
+  bpm?: number;
   [key: string]: string | number | undefined;
 }
 
@@ -28,6 +29,7 @@ function parseFrontmatter(text: string): { meta: SheetMeta; body: string } {
     if (key) meta[key.trim()] = rest.join(':').trim();
   });
   if (meta.capo) meta.capo = parseInt(meta.capo as unknown as string, 10) || 0;
+  if (meta.bpm)  meta.bpm  = parseInt(meta.bpm  as unknown as string, 10) || 0;
 
   return { meta, body: match[2].trim() };
 }

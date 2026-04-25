@@ -108,7 +108,7 @@ hapjoo/
 --------------------------------------------------------------------
 4. Git / Vercel 연결 구조
 --------------------------------------------------------------------
-
+  Vercel 내 확인 : https://vercel.com/twoziqs-projects/hapjoo-95am/deployments
   GitHub 저장소: https://github.com/twoziq/hapjoo
   Vercel 프로젝트: hapjoo-95am (twoziqs-projects 팀)
 

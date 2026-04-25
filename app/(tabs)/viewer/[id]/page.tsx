@@ -19,5 +19,5 @@ export default async function ViewerPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  return <ViewerClient markdown={markdown} />;
+  return <ViewerClient markdown={markdown} songId={id} />;
 }
