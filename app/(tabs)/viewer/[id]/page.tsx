@@ -6,10 +6,7 @@ export default async function ViewerPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   let markdown = getSongMarkdown(id);
 
-  if (
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://your-project.supabase.co'
-  ) {
+  if (supabase) {
     const { data } = await supabase.from('songs').select('content').eq('id', id).single();
     if (data?.content) markdown = data.content;
   }
