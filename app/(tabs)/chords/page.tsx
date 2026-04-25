@@ -107,7 +107,7 @@ export default function ChordsPage() {
 
       {/* ── Right: type tabs + diagram (swipeable) ── */}
       <div
-        className="flex-1 flex flex-col min-w-0 touch-pan-y"
+        className="flex-1 flex flex-col min-w-0 touch-none select-none"
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
