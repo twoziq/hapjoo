@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { dbInsertSong, dbUpdateSong, supabaseConfigured } from '@/lib/supabase';
+import { parseSheet } from '@/lib/chordParser';
 
 export interface Measure { chord: string; lyric: string; }
 export interface Row { id: string; measures: Measure[]; }
@@ -65,6 +66,36 @@ function generateContent(title: string, artist: string, key: string, gender: str
   return front + '\n' + body + '\n';
 }
 
+function parseCodeToData(text: string): {
+  title: string; artist: string; key: string; gender: string; capo: number; bpm: number; sections: Section[];
+} {
+  const { meta, sections: ps } = parseSheet(text);
+  const editorSections: Section[] = [];
+  let cur: Section | null = null;
+  for (const sec of ps) {
+    if (sec.chords.length === 0) {
+      cur = { id: uid(), name: sec.measures[0] ?? '', rows: [] };
+      editorSections.push(cur);
+    } else {
+      if (!cur) { cur = { id: uid(), name: '', rows: [] }; editorSections.push(cur); }
+      cur.rows.push({
+        id: uid(),
+        measures: Array.from({ length: 4 }, (_, i) => ({ chord: sec.chords[i] ?? '', lyric: sec.measures[i] ?? '' })),
+      });
+    }
+  }
+  for (const s of editorSections) { if (s.rows.length === 0) s.rows.push(emptyRow()); }
+  return {
+    title:   String(meta.title  ?? ''),
+    artist:  String(meta.artist ?? ''),
+    key:     String(meta.key    ?? 'G'),
+    gender:  String(meta.gender ?? ''),
+    capo:    Number(meta.capo   ?? 0),
+    bpm:     Number(meta.bpm    ?? 80),
+    sections: editorSections.length > 0 ? editorSections : [emptySection('Verse')],
+  };
+}
+
 function slugify(text: string): string {
   return text.trim().toLowerCase()
     .replace(/\s+/g, '_')
@@ -101,8 +132,21 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
   const [bpm,      setBpm]      = useState(initialData?.bpm      ?? 80);
   const [sections, setSections] = useState<Section[]>(initialData?.sections ?? [emptySection('Verse')]);
   const [showPreview, setShowPreview] = useState(false);
+  const [showCode,  setShowCode]  = useState(false);
+  const [codeText,  setCodeText]  = useState('');
   const [saving,   setSaving]   = useState(false);
   const [result,   setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
+
+  function enterCode() {
+    setCodeText(generateContent(title, artist, key, gender, capo, bpm, sections));
+    setShowCode(true);
+  }
+  function exitCode() {
+    const d = parseCodeToData(codeText);
+    setTitle(d.title); setArtist(d.artist); setKey(d.key);
+    setGender(d.gender); setCapo(d.capo); setBpm(d.bpm); setSections(d.sections);
+    setShowCode(false);
+  }
 
   // Section-level drag
   const [secDragFrom, setSecDragFrom] = useState<number | null>(null);
@@ -187,12 +231,20 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
   }
 
   async function save() {
-    if (!title.trim()) { setResult({ ok: false, msg: '제목을 입력해주세요.' }); return; }
+    const rawContent = showCode ? codeText : generateContent(title, artist, key, gender, capo, bpm, sections);
+    const meta = showCode ? parseSheet(codeText).meta : null;
+    const saveTitle  = meta ? String(meta.title  ?? '') : title;
+    const saveArtist = meta ? String(meta.artist ?? '') : artist;
+    const saveKey    = meta ? String(meta.key    ?? 'G') : key;
+    const saveCapo   = meta ? Number(meta.capo   ?? 0)  : capo;
+    const saveBpm    = meta ? Number(meta.bpm    ?? 80) : bpm;
+
+    if (!saveTitle.trim()) { setResult({ ok: false, msg: '제목을 입력해주세요.' }); return; }
     setSaving(true); setResult(null);
-    const content = generateContent(title, artist, key, gender, capo, bpm, sections);
+    const content = rawContent;
 
     if (isEdit && editSongId) {
-      const err = await dbUpdateSong(editSongId, { title, artist, key, capo, bpm, content });
+      const err = await dbUpdateSong(editSongId, { title: saveTitle, artist: saveArtist, key: saveKey, capo: saveCapo, bpm: saveBpm, content });
       if (err) {
         setResult({ ok: false, msg: `저장 실패: ${err}` });
       } else {
@@ -200,8 +252,8 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
         setTimeout(() => router.push(`/viewer/${editSongId}`), 800);
       }
     } else if (supabaseConfigured) {
-      const id = slugify(title);
-      const err = await dbInsertSong({ id, title, artist, key, capo, bpm, content });
+      const id = slugify(saveTitle);
+      const err = await dbInsertSong({ id, title: saveTitle, artist: saveArtist, key: saveKey, capo: saveCapo, bpm: saveBpm, content });
       if (err) {
         setResult({ ok: false, msg: `저장 실패: ${err}` });
       } else {
@@ -232,10 +284,16 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
             className="text-gray-400 text-lg px-1"
           >←</button>
           <h1 className="flex-1 text-base font-bold">{isEdit ? '악보 편집' : '새 악보 작성'}</h1>
+          {!showCode && (
+            <button
+              onClick={() => setShowPreview(p => !p)}
+              className={`text-xs px-3 py-1.5 rounded-full font-semibold ${showPreview ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-400'}`}
+            >미리보기</button>
+          )}
           <button
-            onClick={() => setShowPreview(p => !p)}
-            className={`text-xs px-3 py-1.5 rounded-full font-semibold ${showPreview ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-400'}`}
-          >미리보기</button>
+            onClick={showCode ? exitCode : enterCode}
+            className={`text-xs px-3 py-1.5 rounded-full font-semibold ${showCode ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'}`}
+          >코드</button>
           <button
             onClick={save}
             disabled={saving}
@@ -249,7 +307,19 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col gap-5">
+      {showCode && (
+        <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col gap-2 h-[calc(100vh-64px)]">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">코드 편집 — 수정 후 코드 버튼을 다시 눌러 반영</p>
+          <textarea
+            value={codeText}
+            onChange={e => setCodeText(e.target.value)}
+            spellCheck={false}
+            className="flex-1 bg-gray-900 text-green-300 font-mono text-[13px] leading-relaxed rounded-2xl p-4 outline-none resize-none"
+          />
+        </div>
+      )}
+
+      {!showCode && <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col gap-5">
 
         {/* Meta */}
         <div className="bg-white rounded-2xl p-4 border border-gray-200 flex flex-col gap-3">
@@ -329,7 +399,7 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
         )}
 
         <div className="h-10" />
-      </div>
+      </div>}
     </div>
   );
 }
