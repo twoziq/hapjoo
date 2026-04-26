@@ -253,7 +253,7 @@ function MeasureCell({
   return (
     <div
       ref={setRef as any}
-      className={`px-2 pb-2 transition-colors relative touch-none select-none
+      className={`px-2 pb-2 transition-colors relative touch-none select-none min-w-0 overflow-hidden
         ${cursorClass}
         ${isRest ? 'pointer-events-none' : 'cursor-pointer'}
       `}
