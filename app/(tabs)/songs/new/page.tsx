@@ -1,25 +1,63 @@
 'use client';
 
-import { useState, useRef, useId } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { dbInsertSong, supabaseConfigured } from '@/lib/supabase';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 interface Measure  { chord: string; lyric: string; }
 interface Row      { id: string; measures: Measure[]; }
 interface Section  { id: string; name: string; rows: Row[]; }
 
-const KEYS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
-const TIME_SIGS = ['4/4', '3/4', '6/8'];
+const KEYS    = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const GENDERS = ['남', '여'] as const;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 8);
 const emptyMeasure = (): Measure => ({ chord: '', lyric: '' });
-const emptyRow = (): Row => ({ id: uid(), measures: [emptyMeasure(), emptyMeasure(), emptyMeasure(), emptyMeasure()] });
+const emptyRow     = (): Row => ({ id: uid(), measures: [emptyMeasure(), emptyMeasure(), emptyMeasure(), emptyMeasure()] });
 const emptySection = (name = ''): Section => ({ id: uid(), name, rows: [emptyRow()] });
 
-function generateContent(title: string, artist: string, key: string, capo: number, bpm: number, sections: Section[]): string {
-  const front = `---\ntitle: ${title}\nartist: ${artist}\nkey: ${key}\ncapo: ${capo}\nbpm: ${bpm}\n---\n`;
+// ── Smart chord input ─────────────────────────────────────────────────────────
+// "GDEmC"   → ['G','D','Em','C']
+// "G..Em"   → ['G','','','Em']
+// "G.Em."   → ['G','','Em','']
+const CHORD_RX = /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+)*(?:\/[A-G][b#]?)?/gi;
+
+function parseSmartChord(raw: string): string[] | null {
+  const val = raw.trim();
+  if (!val) return null;
+
+  if (val.includes('.')) {
+    const result = ['', '', '', ''];
+    let pos = 0; let i = 0;
+    while (i < val.length && pos < 4) {
+      if (val[i] === '.') { pos++; i++; continue; }
+      const m = val.slice(i).match(new RegExp('^(' + CHORD_RX.source + ')', 'i'));
+      if (m) { result[pos] = m[1].toUpperCase(); pos++; i += m[1].length; }
+      else i++;
+    }
+    return result;
+  }
+
+  const matches = [...val.matchAll(CHORD_RX)].map(m => m[0]);
+  if (matches.length < 2) return null; // single chord — no distribution needed
+
+  const result = ['', '', '', ''];
+  matches.slice(0, 4).forEach((c, i) => { result[i] = c; });
+  return result;
+}
+
+function generateContent(title: string, artist: string, key: string, gender: string, capo: number, bpm: number, sections: Section[]): string {
+  const front = [
+    '---',
+    `title: ${title}`,
+    `artist: ${artist}`,
+    `key: ${key}`,
+    gender ? `gender: ${gender}` : '',
+    `capo: ${capo}`,
+    `bpm: ${bpm}`,
+    '---',
+  ].filter(Boolean).join('\n') + '\n';
+
   const body = sections.map(sec => {
     const header = `[${sec.name || '구간'}]`;
     const rows = sec.rows.map(row => {
@@ -28,6 +66,7 @@ function generateContent(title: string, artist: string, key: string, capo: numbe
     });
     return [header, ...rows].join('\n');
   }).join('\n\n');
+
   return front + '\n' + body + '\n';
 }
 
@@ -43,22 +82,23 @@ function slugify(text: string): string {
 export default function NewSongPage() {
   const router = useRouter();
 
-  const [title,   setTitle]   = useState('');
-  const [artist,  setArtist]  = useState('');
-  const [key,     setKey]     = useState('G');
-  const [capo,    setCapo]    = useState(0);
-  const [bpm,     setBpm]     = useState(80);
+  const [title,    setTitle]    = useState('');
+  const [artist,   setArtist]   = useState('');
+  const [key,      setKey]      = useState('G');
+  const [gender,   setGender]   = useState('');
+  const [capo,     setCapo]     = useState(0);
+  const [bpm,      setBpm]      = useState(80);
   const [sections, setSections] = useState<Section[]>([emptySection('Verse')]);
   const [showPreview, setShowPreview] = useState(false);
-  const [saving,  setSaving]  = useState(false);
-  const [result,  setResult]  = useState<{ ok: boolean; msg: string } | null>(null);
+  const [saving,   setSaving]   = useState(false);
+  const [result,   setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // ── Section / row operations ─────────────────────────────────────────────────
   function updateSection(si: number, patch: Partial<Section>) {
     setSections(prev => prev.map((s, i) => i === si ? { ...s, ...patch } : s));
   }
   function addSection() { setSections(prev => [...prev, emptySection()]); }
   function removeSection(si: number) { setSections(prev => prev.filter((_, i) => i !== si)); }
+
   function addRow(si: number) {
     setSections(prev => prev.map((s, i) => i === si ? { ...s, rows: [...s.rows, emptyRow()] } : s));
   }
@@ -67,6 +107,15 @@ export default function NewSongPage() {
       if (i !== si) return s;
       const rows = s.rows.filter((_, j) => j !== ri);
       return { ...s, rows: rows.length ? rows : [emptyRow()] };
+    }));
+  }
+  function moveRow(si: number, from: number, to: number) {
+    setSections(prev => prev.map((s, i) => {
+      if (i !== si) return s;
+      const rows = [...s.rows];
+      const [removed] = rows.splice(from, 1);
+      rows.splice(to, 0, removed);
+      return { ...s, rows };
     }));
   }
   function updateMeasure(si: number, ri: number, mi: number, patch: Partial<Measure>) {
@@ -80,12 +129,22 @@ export default function NewSongPage() {
       return { ...s, rows };
     }));
   }
+  function batchUpdateChords(si: number, ri: number, chords: string[]) {
+    setSections(prev => prev.map((s, i) => {
+      if (i !== si) return s;
+      const rows = s.rows.map((r, j) => {
+        if (j !== ri) return r;
+        const measures = r.measures.map((m, k) => ({ ...m, chord: chords[k] ?? '' }));
+        return { ...r, measures };
+      });
+      return { ...s, rows };
+    }));
+  }
 
-  // ── Save ─────────────────────────────────────────────────────────────────────
   async function save() {
     if (!title.trim()) { setResult({ ok: false, msg: '제목을 입력해주세요.' }); return; }
     setSaving(true); setResult(null);
-    const content = generateContent(title, artist, key, capo, bpm, sections);
+    const content = generateContent(title, artist, key, gender, capo, bpm, sections);
     const id = slugify(title);
 
     if (supabaseConfigured) {
@@ -97,7 +156,6 @@ export default function NewSongPage() {
         setTimeout(() => router.push('/songs'), 800);
       }
     } else {
-      // Supabase 미설정: 생성된 텍스트를 클립보드로
       try {
         await navigator.clipboard.writeText(content);
         setResult({ ok: true, msg: '악보 텍스트가 클립보드에 복사됐습니다. data/songs/ 폴더에 .ts 파일로 붙여넣어 추가하세요.' });
@@ -109,7 +167,7 @@ export default function NewSongPage() {
     setSaving(false);
   }
 
-  const content = generateContent(title, artist, key, capo, bpm, sections);
+  const content = generateContent(title, artist, key, gender, capo, bpm, sections);
 
   return (
     <div className="min-h-full bg-gray-50">
@@ -139,14 +197,22 @@ export default function NewSongPage() {
 
         {/* Meta */}
         <div className="bg-white rounded-2xl p-4 border border-gray-200 flex flex-col gap-3">
-          <MetaField label="제목" value={title} onChange={setTitle} placeholder="곡 제목" />
-          <MetaField label="아티스트" value={artist} onChange={setArtist} placeholder="아티스트명" />
+          <MetaField label="제목"      value={title}  onChange={setTitle}  placeholder="곡 제목" />
+          <MetaField label="아티스트"  value={artist} onChange={setArtist} placeholder="아티스트명" />
           <div className="flex gap-3">
             <div className="flex-1 flex flex-col gap-1">
               <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">키</label>
               <select value={key} onChange={e => setKey(e.target.value)}
                 className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-indigo-600 outline-none focus:border-indigo-400 bg-white">
                 {KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">성별</label>
+              <select value={gender} onChange={e => setGender(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 bg-white">
+                <option value="">미지정</option>
+                {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div className="flex-1 flex flex-col gap-1">
@@ -162,15 +228,12 @@ export default function NewSongPage() {
           </div>
         </div>
 
-        {/* Supabase 미설정 안내 */}
         {!supabaseConfigured && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed">
-            <strong>Supabase 미연결:</strong> 저장 시 악보 텍스트를 클립보드에 복사합니다.<br />
-            연결하려면 <code>.env.local</code>에 SUPABASE_URL / ANON_KEY를 설정하세요.
+            <strong>Supabase 미연결:</strong> 저장 시 악보 텍스트를 클립보드에 복사합니다.
           </div>
         )}
 
-        {/* Sections */}
         {sections.map((sec, si) => (
           <SectionEditor
             key={sec.id}
@@ -181,7 +244,9 @@ export default function NewSongPage() {
             onRemoveSection={() => removeSection(si)}
             onAddRow={() => addRow(si)}
             onRemoveRow={ri => removeRow(si, ri)}
+            onMoveRow={(from, to) => moveRow(si, from, to)}
             onMeasureChange={(ri, mi, patch) => updateMeasure(si, ri, mi, patch)}
+            onChordBatch={(ri, chords) => batchUpdateChords(si, ri, chords)}
           />
         ))}
 
@@ -190,7 +255,6 @@ export default function NewSongPage() {
           + 구간 추가
         </button>
 
-        {/* Preview */}
         {showPreview && (
           <div className="bg-gray-900 rounded-2xl p-4">
             <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">생성된 악보 텍스트</p>
@@ -216,7 +280,7 @@ function MetaField({ label, value, onChange, placeholder }: { label: string; val
 }
 
 // ── SectionEditor ─────────────────────────────────────────────────────────────
-function SectionEditor({ section, sectionIdx, sectionCount, onNameChange, onRemoveSection, onAddRow, onRemoveRow, onMeasureChange }: {
+function SectionEditor({ section, sectionIdx, sectionCount, onNameChange, onRemoveSection, onAddRow, onRemoveRow, onMoveRow, onMeasureChange, onChordBatch }: {
   section: Section;
   sectionIdx: number;
   sectionCount: number;
@@ -224,8 +288,40 @@ function SectionEditor({ section, sectionIdx, sectionCount, onNameChange, onRemo
   onRemoveSection: () => void;
   onAddRow: () => void;
   onRemoveRow: (ri: number) => void;
+  onMoveRow: (from: number, to: number) => void;
   onMeasureChange: (ri: number, mi: number, patch: Partial<Measure>) => void;
+  onChordBatch: (ri: number, chords: string[]) => void;
 }) {
+  const [dragFromRi, setDragFromRi] = useState<number | null>(null);
+  const [dragOverRi, setDragOverRi] = useState<number | null>(null);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  function handleRowDragDown(e: React.PointerEvent, ri: number) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragFromRi(ri);
+    setDragOverRi(ri);
+  }
+
+  function handleRowDragMove(e: React.PointerEvent) {
+    if (dragFromRi === null) return;
+    const y = e.clientY;
+    for (let i = 0; i < rowRefs.current.length; i++) {
+      const el = rowRefs.current[i];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (y >= rect.top && y < rect.bottom) { setDragOverRi(i); break; }
+    }
+  }
+
+  function handleRowDragUp() {
+    if (dragFromRi !== null && dragOverRi !== null && dragFromRi !== dragOverRi) {
+      onMoveRow(dragFromRi, dragOverRi);
+    }
+    setDragFromRi(null);
+    setDragOverRi(null);
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
       {/* Section header */}
@@ -246,15 +342,26 @@ function SectionEditor({ section, sectionIdx, sectionCount, onNameChange, onRemo
       {/* Rows */}
       <div className="flex flex-col divide-y divide-gray-100">
         {section.rows.map((row, ri) => (
-          <RowEditor
+          <div
             key={row.id}
-            row={row}
-            rowIdx={ri}
-            sectionIdx={sectionIdx}
-            totalRows={section.rows.length}
-            onRemove={() => onRemoveRow(ri)}
-            onChange={(mi, patch) => onMeasureChange(ri, mi, patch)}
-          />
+            ref={el => { rowRefs.current[ri] = el; }}
+            className={`${dragFromRi === ri ? 'opacity-40' : ''} ${dragOverRi === ri && dragFromRi !== ri ? 'ring-2 ring-inset ring-indigo-300' : ''}`}
+          >
+            <RowEditor
+              row={row}
+              rowIdx={ri}
+              totalRows={section.rows.length}
+              onRemove={() => onRemoveRow(ri)}
+              onChange={(mi, patch) => onMeasureChange(ri, mi, patch)}
+              onChordBatch={chords => onChordBatch(ri, chords)}
+              dragHandleProps={{
+                onPointerDown: e => handleRowDragDown(e, ri),
+                onPointerMove: handleRowDragMove,
+                onPointerUp:   handleRowDragUp,
+                onPointerCancel: () => { setDragFromRi(null); setDragOverRi(null); },
+              }}
+            />
+          </div>
         ))}
       </div>
 
@@ -267,36 +374,53 @@ function SectionEditor({ section, sectionIdx, sectionCount, onNameChange, onRemo
 }
 
 // ── RowEditor ─────────────────────────────────────────────────────────────────
-// Tab order: chord0 → chord1 → chord2 → chord3 → lyric0 → lyric1 → lyric2 → lyric3
-// Achieved by DOM order: all chords first, then all lyrics; CSS grid places them visually
-function RowEditor({ row, rowIdx, sectionIdx, totalRows, onRemove, onChange }: {
+function RowEditor({ row, rowIdx, totalRows, onRemove, onChange, onChordBatch, dragHandleProps }: {
   row: Row;
   rowIdx: number;
-  sectionIdx: number;
   totalRows: number;
   onRemove: () => void;
   onChange: (mi: number, patch: Partial<Measure>) => void;
+  onChordBatch: (chords: string[]) => void;
+  dragHandleProps: {
+    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: () => void;
+    onPointerCancel: () => void;
+  };
 }) {
+  function handleChord0Blur(e: React.FocusEvent<HTMLInputElement>) {
+    const parsed = parseSmartChord(e.target.value);
+    if (parsed) onChordBatch(parsed);
+  }
+
   return (
-    <div className="relative group px-3 py-2">
-      {/* 4-column grid: row1 = chords, row2 = lyrics. DOM order: all chords then all lyrics */}
+    <div className="flex items-start gap-1 px-2 py-2 group">
+      {/* Drag handle */}
       <div
-        className="grid gap-px"
+        className="mt-1.5 cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-base w-5 text-center shrink-0"
+        {...dragHandleProps}
+      >⠿</div>
+
+      {/* 4-column grid: row1 = chords, row2 = lyrics */}
+      <div className="flex-1 grid gap-px"
         style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'auto auto' }}
       >
-        {/* Chord inputs — all 4, placed in row 1 */}
+        {/* Chord inputs */}
         {row.measures.map((m, mi) => (
           <input
             key={`c_${mi}`}
             type="text"
             value={m.chord}
+            tabIndex={-1}
             onChange={e => onChange(mi, { chord: e.target.value.toUpperCase() })}
+            onBlur={mi === 0 ? handleChord0Blur : undefined}
+            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
             placeholder={['G', 'D', 'Em', 'Am'][mi]}
             style={{ gridColumn: mi + 1, gridRow: 1 }}
-            className="bg-indigo-50 text-indigo-700 font-bold text-sm text-center rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full"
+            className="bg-indigo-50 text-indigo-700 font-bold text-sm rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full"
           />
         ))}
-        {/* Lyric inputs — all 4, placed in row 2 */}
+        {/* Lyric inputs */}
         {row.measures.map((m, mi) => (
           <input
             key={`l_${mi}`}
@@ -305,16 +429,16 @@ function RowEditor({ row, rowIdx, sectionIdx, totalRows, onRemove, onChange }: {
             onChange={e => onChange(mi, { lyric: e.target.value })}
             placeholder="가사"
             style={{ gridColumn: mi + 1, gridRow: 2 }}
-            className="bg-white text-gray-800 text-sm text-center border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full"
+            className="bg-white text-gray-800 text-sm border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full"
           />
         ))}
       </div>
 
-      {/* Row remove button */}
+      {/* Remove button */}
       {totalRows > 1 && (
         <button
           onClick={onRemove}
-          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center text-[10px] text-gray-300 hover:text-red-400"
+          className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center text-[10px] text-gray-300 hover:text-red-400 shrink-0"
         >✕</button>
       )}
     </div>

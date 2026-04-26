@@ -11,12 +11,11 @@ type TimeSig = '4/4' | '3/4' | '6/8';
 const TIME_SIG_OPTIONS: TimeSig[] = ['4/4', '3/4', '6/8'];
 
 function getBeatsPerBar(ts: TimeSig): number {
-  return parseInt(ts.split('/')[0], 10); // 4, 3, 6
+  return parseInt(ts.split('/')[0], 10);
 }
 
 function getBeatIntervalMs(ts: TimeSig, bpm: number): number {
   const d = parseInt(ts.split('/')[1], 10);
-  // 6/8: eighth note tempo
   return d === 8 ? Math.round(60000 / bpm * 0.5) : Math.round(60000 / bpm);
 }
 
@@ -31,11 +30,10 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [bpmEditing, setBpmEd]  = useState(false);
   const [bpmDraft, setBpmDraft] = useState('');
 
-  const [timeSig, setTimeSig]       = useState<TimeSig>('4/4');
-  const [timeSigOpen, setTsOpen]    = useState(false);
+  const [timeSig, setTimeSig]    = useState<TimeSig>('4/4');
+  const [timeSigOpen, setTsOpen] = useState(false);
   const tsLongRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Lifted editMode state
   const [editMode, setEditMode] = useState(false);
 
   // Playback
@@ -43,22 +41,18 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [isCountingIn, setIsCountingIn] = useState(false);
   const [playIdx, setPlayIdx]           = useState(0);
 
-  // Beat indicator: beat = current beat index (0-based), tick increments each beat for key animation
   const [beatState, setBeatState] = useState<{ beat: number; tick: number }>({ beat: -1, tick: 0 });
 
-  // Refs for imperative control (avoid stale closures in intervals)
+  // Refs for imperative control
   const phaseRef          = useRef<'idle' | 'countIn' | 'playing'>('idle');
   const beatsPerBarRef    = useRef(getBeatsPerBar(timeSig));
   const beatIntervalRef   = useRef(getBeatIntervalMs(timeSig, bpm));
   const countInCountRef   = useRef(0);
+  const playBeatCountRef  = useRef(0);
   const beatTimerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
-  const measureTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Keep refs in sync
-  useEffect(() => {
-    beatsPerBarRef.current  = getBeatsPerBar(timeSig);
-    beatIntervalRef.current = getBeatIntervalMs(timeSig, bpm);
-  }, [timeSig, bpm]);
+  const playIdxRef = useRef(0);
+  const flatMeasuresRef = useRef<{ si: number; mi: number }[]>([]);
 
   const flatMeasures = useMemo(() => {
     const r: { si: number; mi: number }[] = [];
@@ -71,21 +65,37 @@ export default function ViewerClient({ markdown, songId }: Props) {
     return r;
   }, [sections]);
 
+  useEffect(() => { flatMeasuresRef.current = flatMeasures; }, [flatMeasures]);
+  useEffect(() => {
+    beatsPerBarRef.current  = getBeatsPerBar(timeSig);
+    beatIntervalRef.current = getBeatIntervalMs(timeSig, bpm);
+  }, [timeSig, bpm]);
+
+  // Save last viewed song for tab navigation
+  useEffect(() => {
+    try { localStorage.setItem('hapjoo_lastSong', songId); } catch {}
+  }, [songId]);
+
+  // ── Seek helper ────────────────────────────────────────────────
+  function seekTo(idx: number) {
+    playIdxRef.current = idx;
+    setPlayIdx(idx);
+  }
+
   // ── Stop everything ────────────────────────────────────────────
   function stopAll() {
-    if (beatTimerRef.current)    { clearInterval(beatTimerRef.current);    beatTimerRef.current = null; }
-    if (measureTimerRef.current) { clearInterval(measureTimerRef.current); measureTimerRef.current = null; }
+    if (beatTimerRef.current) { clearInterval(beatTimerRef.current); beatTimerRef.current = null; }
     phaseRef.current = 'idle';
     setIsPlaying(false);
     setIsCountingIn(false);
     setBeatState({ beat: -1, tick: 0 });
   }
 
-  // ── Launch beat ticker (shared by count-in and playing) ────────
+  // ── Beat ticker — drives both metronome AND measure advance ────
   function launchBeatTicker() {
     if (beatTimerRef.current) clearInterval(beatTimerRef.current);
-    countInCountRef.current = 0;
-    // Show beat 0 immediately
+    countInCountRef.current  = 0;
+    playBeatCountRef.current = 0;
     setBeatState({ beat: 0, tick: 1 });
 
     beatTimerRef.current = setInterval(() => {
@@ -93,43 +103,39 @@ export default function ViewerClient({ markdown, songId }: Props) {
         beat: (prev.beat + 1) % beatsPerBarRef.current,
         tick: prev.tick + 1,
       }));
-      countInCountRef.current++;
-      if (phaseRef.current === 'countIn' && countInCountRef.current >= beatsPerBarRef.current) {
-        // Count-in done → start playing
-        phaseRef.current = 'playing';
-        setIsCountingIn(false);
-        setIsPlaying(true);
-        countInCountRef.current = 0;
+
+      if (phaseRef.current === 'countIn') {
+        countInCountRef.current++;
+        if (countInCountRef.current >= beatsPerBarRef.current) {
+          phaseRef.current = 'playing';
+          setIsCountingIn(false);
+          setIsPlaying(true);
+          countInCountRef.current  = 0;
+          playBeatCountRef.current = 0;
+        }
+        return;
+      }
+
+      if (phaseRef.current === 'playing') {
+        playBeatCountRef.current++;
+        if (playBeatCountRef.current >= beatsPerBarRef.current) {
+          playBeatCountRef.current = 0;
+          const next = playIdxRef.current + 1;
+          if (next >= flatMeasuresRef.current.length) {
+            stopAll();
+          } else {
+            playIdxRef.current = next;
+            setPlayIdx(next);
+          }
+        }
       }
     }, beatIntervalRef.current);
   }
 
-  // ── Measure timer (starts when isPlaying becomes true) ────────
-  useEffect(() => {
-    if (measureTimerRef.current) clearInterval(measureTimerRef.current);
-    if (!isPlaying) return;
-
-    measureTimerRef.current = setInterval(() => {
-      setPlayIdx(prev => {
-        const next = prev + 1;
-        if (next >= flatMeasures.length) {
-          stopAll();
-          return 0;
-        }
-        return next;
-      });
-    }, Math.round(60000 / bpm * 2));
-
-    return () => { if (measureTimerRef.current) clearInterval(measureTimerRef.current); };
-  }, [isPlaying, bpm, flatMeasures.length]);
-
   // ── Toggle play ────────────────────────────────────────────────
   function togglePlay() {
-    if (phaseRef.current !== 'idle') {
-      stopAll();
-      return;
-    }
-    setPlayIdx(0);
+    if (phaseRef.current !== 'idle') { stopAll(); return; }
+    seekTo(0);
     phaseRef.current = 'countIn';
     setIsCountingIn(true);
     launchBeatTicker();
@@ -138,9 +144,9 @@ export default function ViewerClient({ markdown, songId }: Props) {
   function onCellTap(si: number, mi: number) {
     const idx = flatMeasures.findIndex(m => m.si === si && m.mi === mi);
     if (idx < 0) return;
-    setPlayIdx(idx);
+    seekTo(idx);
     if (phaseRef.current === 'idle') {
-      // Start playing directly from this cell (no count-in)
+      playBeatCountRef.current = 0;
       phaseRef.current = 'playing';
       setIsPlaying(true);
       launchBeatTicker();
@@ -160,7 +166,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
     setBpm(prev => Math.min(300, Math.max(20, prev + delta)));
   }
 
-  // ── Header collapse (also collapses edit mode) ─────────────────
+  // ── Header collapse ────────────────────────────────────────────
   function setHeader(collapsed: boolean) {
     setHeaderRaw(collapsed);
     if (collapsed) setEditMode(false);
@@ -175,13 +181,17 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const beatsPerBar = getBeatsPerBar(timeSig);
   const showBeatBar = isPlaying || isCountingIn;
 
+  // ── 남/여 key logic ────────────────────────────────────────────
+  const songGender  = (meta.gender as string) || '남';
+  const maleSemi    = songGender === '여' ? -5 : 0;
+  const femaleSemi  = songGender === '여' ? 0 : 5;
+
   return (
     <div className="flex flex-col h-full">
       {/* ── Sticky header ─────────────────────────────────────── */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
 
-          {/* Beat indicator row (always visible when playing/counting) */}
           {showBeatBar && (
             <div className="flex items-center justify-center gap-2 mb-2">
               {Array.from({ length: beatsPerBar }).map((_, i) => {
@@ -235,13 +245,15 @@ export default function ViewerClient({ markdown, songId }: Props) {
               <span className="text-sm font-black text-indigo-600 w-7 text-center">{currentKey}</span>
               <button onClick={() => setSemitones(s => s + 1)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200">+</button>
-              <button onClick={() => setSemitones(0)}
-                className={`text-[10px] px-1.5 h-6 rounded-full font-semibold ml-1 ${semitones === 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
-                원키
+
+              {/* 남/여 버튼 */}
+              <button onClick={() => setSemitones(maleSemi)}
+                className={`text-[10px] px-2 h-6 rounded-full font-semibold ml-1 ${semitones === maleSemi ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+                남
               </button>
-              <button onClick={() => setSemitones(5)}
-                className={`text-[10px] px-1.5 h-6 rounded-full font-semibold ${semitones === 5 ? 'bg-pink-100 text-pink-500' : 'bg-gray-100 text-gray-400'}`}>
-                +5
+              <button onClick={() => setSemitones(femaleSemi)}
+                className={`text-[10px] px-2 h-6 rounded-full font-semibold ${semitones === femaleSemi ? 'bg-pink-100 text-pink-500' : 'bg-gray-100 text-gray-400'}`}>
+                여
               </button>
 
               <div className="flex-1" />
@@ -336,13 +348,14 @@ export default function ViewerClient({ markdown, songId }: Props) {
             </div>
             <div className="flex flex-col gap-3">
               <HelpRow icon="▶" title="재생 / 정지">마디 클릭 → 해당 위치부터 바로 재생. ▶ 버튼은 카운트인 후 시작.</HelpRow>
-              <HelpRow icon="🥁" title="메트로놈">재생 시 상단에 박자 동글뱅이 표시. 카운트인은 주황색, 재생 중은 빨간색.</HelpRow>
-              <HelpRow icon="♩" title="박자표 꾹 누르기">4/4 · 3/4 · 6/8 중 선택. 카운트인 박수 수도 함께 적용.</HelpRow>
+              <HelpRow icon="🥁" title="메트로놈">재생 시 상단에 박자 동글뱅이 표시. 카운트인은 주황색, 재생 중은 빨간색. 박자에 맞춰 마디 커서도 이동.</HelpRow>
+              <HelpRow icon="♩" title="박자표 꾹 누르기">4/4 · 3/4 · 6/8 중 선택.</HelpRow>
               <HelpRow icon="↯" title="BPM 꾹 누르기">BPM 숫자를 길게 누르면 직접 입력. +/- 버튼으로 1씩 조절.</HelpRow>
-              <HelpRow icon="접기" title="헤더 접기">접기/펼치기 버튼으로 상단 컨트롤 토글. 접으면 편집 모드도 해제.</HelpRow>
+              <HelpRow icon="남/여" title="키 전환">남/여 버튼으로 키 전환. 곡에 성별이 지정된 경우 해당 키로 설정됨.</HelpRow>
+              <HelpRow icon="접기" title="헤더 접기">접기/펼치기 버튼으로 상단 컨트롤 토글.</HelpRow>
               <HelpRow icon="💬" title="마디 꾹 누르기 (일반 모드)">메모 입력 → 말풍선으로 표시.</HelpRow>
               <HelpRow icon="✎" title="편집 모드">
-                {'• 섹션 이름 꾹 누르기 → 이름 변경\n• ▲▼ 블록 순서 이동\n• ⊕ 블록 복사\n• ✕ 블록 삭제\n• 마디 꾹 누르기 → 행 선택 후 구간 이름 붙이기\n• 블록 사이 + 버튼 → 새 구간 추가\n• 원본 복귀 버튼으로 초기화'}
+                {'• 섹션 이름 꾹 누르기 → 이름 변경\n• ⠿ 핸들 드래그 → 블록 순서 이동\n• ⊕ 블록 복사\n• ✕ 블록 삭제\n• 마디 탭 → 코드/가사 편집\n• 마디 꾹 누르기 → 행 선택 후 구간 이름 붙이기\n• 블록 사이 + 버튼 → 새 구간 추가\n• 원본 복귀 버튼으로 초기화'}
               </HelpRow>
             </div>
           </div>

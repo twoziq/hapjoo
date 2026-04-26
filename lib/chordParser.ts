@@ -51,7 +51,8 @@ function parseSegment(seg: string): { chord: string; lyric: string } {
 }
 
 function parseMeasureLine(line: string): SheetSection {
-  const clean = line.replace(/\/\/\s*$/, '').trim();
+  const padTo4 = line.includes('//');
+  const clean = line.replace(/\/\//g, '').trim();
   const segs = clean.split('/');
   const chords: string[] = [];
   const measures: string[] = [];
@@ -61,6 +62,10 @@ function parseMeasureLine(line: string): SheetSection {
     const { chord, lyric } = parseSegment(segs[i]);
     chords.push(chord);
     measures.push(lyric);
+  }
+
+  if (padTo4) {
+    while (chords.length < 4) { chords.push(''); measures.push(''); }
   }
 
   return { chords, lyrics: measures.join(' | '), measures };

@@ -18,7 +18,6 @@ interface Props {
   onCellTap: (si: number, mi: number) => void;
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────
 interface OSection { uid: string; section: SheetSection; originalIdx: number }
 interface Block    { id: string; label: OSection | null; rows: OSection[] }
 
@@ -49,7 +48,6 @@ function flatten(blocks: Block[]): OSection[] {
 
 function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}`; }
 
-// ── Long-press hook ────────────────────────────────────────────────────────
 function useLongPress(cb: () => void, ms = 500) {
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   return {
@@ -60,7 +58,7 @@ function useLongPress(cb: () => void, ms = 500) {
   };
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function SheetViewer({ sections, semitones, currentPos, showNotes, songId, isPlaying, editMode, setEditMode, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
   const [oSections, setOSections]     = useState<OSection[]>(() => makeOS(sections));
@@ -73,6 +71,12 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
   const [animBlockIds, setAnimBlockIds] = useState<Set<string>>(new Set());
+  const [editingRow, setEditingRow]   = useState<OSection | null>(null);
+
+  // Block drag state
+  const [activeDrag, setActiveDrag]   = useState<{ fromBi: number } | null>(null);
+  const [dragOverBi, setDragOverBi]   = useState<number | null>(null);
+  const blockDivRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`hapjoo_notes_${songId}`) ?? '{}'); }
@@ -101,10 +105,10 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   const blocks = toBlocks(oSections);
 
   // ── Block operations ───────────────────────────────────────────
-  function moveBlock(bi: number, dir: -1 | 1) {
-    const nb = [...blocks], ti = bi + dir;
-    if (ti < 0 || ti >= nb.length) return;
-    [nb[bi], nb[ti]] = [nb[ti], nb[bi]];
+  function moveBlockTo(from: number, to: number) {
+    const nb = [...blocks];
+    const [removed] = nb.splice(from, 1);
+    nb.splice(to, 0, removed);
     setOSections(flatten(nb));
   }
 
@@ -134,7 +138,6 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
     setEditMode(false);
   }
 
-  // ── Insert new section between blocks ────────────────────────
   function insertSection(afterBi: number) {
     const uid = `new_${Date.now()}`;
     const newOS: OSection = {
@@ -146,10 +149,8 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
     const nb = [...blocks];
     nb.splice(afterBi + 1, 0, newBlock);
     setOSections(flatten(nb));
-    // Trigger animation
     setAnimBlockIds(prev => new Set([...prev, uid]));
     setTimeout(() => setAnimBlockIds(prev => { const n = new Set(prev); n.delete(uid); return n; }), 500);
-    // Auto-open label editing
     setLabelDraft('새 구간');
     setEditingUid(uid);
   }
@@ -171,6 +172,44 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   function commitLabel(uid: string, val: string) {
     setLabels(prev => ({ ...prev, [uid]: val }));
     setEditingUid(null);
+  }
+
+  function updateRow(uid: string, chords: string[], measures: string[]) {
+    setOSections(prev => prev.map(s =>
+      s.uid === uid
+        ? { ...s, section: { ...s.section, chords, measures, lyrics: measures.join(' | ') } }
+        : s
+    ));
+  }
+
+  // ── Block drag handlers ────────────────────────────────────────
+  function handleDragPointerDown(e: React.PointerEvent, bi: number) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setActiveDrag({ fromBi: bi });
+    setDragOverBi(bi);
+  }
+
+  function handleDragPointerMove(e: React.PointerEvent) {
+    if (!activeDrag) return;
+    const y = e.clientY;
+    for (let i = 0; i < blockDivRefs.current.length; i++) {
+      const el = blockDivRefs.current[i];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (y >= rect.top && y < rect.bottom) {
+        setDragOverBi(i);
+        break;
+      }
+    }
+  }
+
+  function handleDragPointerUp() {
+    if (activeDrag && dragOverBi !== null && dragOverBi !== activeDrag.fromBi) {
+      moveBlockTo(activeDrag.fromBi, dragOverBi);
+    }
+    setActiveDrag(null);
+    setDragOverBi(null);
   }
 
   function tr(c: string) { return transposeChord(c, semitones); }
@@ -210,19 +249,27 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
 
       {/* Blocks */}
       {blocks.map((block, bi) => (
-        <div key={block.id}>
-          <div
-            className={`mb-3 ${animBlockIds.has(block.id) ? 'slide-in-section' : ''}`}
-          >
+        <div
+          key={block.id}
+          ref={el => { blockDivRefs.current[bi] = el; }}
+        >
+          <div className={`mb-3 ${animBlockIds.has(block.id) ? 'slide-in-section' : ''}
+            ${activeDrag?.fromBi === bi ? 'opacity-40' : ''}
+            ${dragOverBi === bi && activeDrag?.fromBi !== bi ? 'ring-2 ring-indigo-300 rounded-xl' : ''}
+          `}>
             {/* Section label */}
             {block.label && (
               <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
                 {editMode && (
                   <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                    <button onClick={() => moveBlock(bi, -1)} disabled={bi === 0}
-                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-gray-700 disabled:opacity-20">▲</button>
-                    <button onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1}
-                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-gray-700 disabled:opacity-20">▼</button>
+                    {/* Drag handle */}
+                    <div
+                      className="w-6 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-lg"
+                      onPointerDown={e => handleDragPointerDown(e, bi)}
+                      onPointerMove={handleDragPointerMove}
+                      onPointerUp={handleDragPointerUp}
+                      onPointerCancel={() => { setActiveDrag(null); setDragOverBi(null); }}
+                    >⠿</div>
                     <button onClick={() => copyBlock(bi)} title="복사"
                       className="w-5 h-5 text-[11px] text-gray-400 hover:text-indigo-500">⊕</button>
                     <button onClick={() => deleteBlock(bi)} title="삭제"
@@ -247,7 +294,6 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
               </div>
             )}
 
-            {/* Row grids — each OSection gets its own sub-grid so row lengths don't bleed into each other */}
             {block.rows.length > 0 && (
               <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
                 {block.rows.map(os => {
@@ -256,7 +302,6 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
                   const count    = measures.length;
                   const oneToOne = chords.length === count;
                   const isRowSel = editMode && selected.has(os.uid);
-                  // ≤4 measures: use exact column count; >4: wrap in grid-cols-4
                   const cols = count <= 4 ? count : 4;
 
                   return (
@@ -290,7 +335,13 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
                               ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
                               : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
                             }
-                            onTap={() => onCellTap(os.originalIdx, mi)}
+                            onTap={() => {
+                              if (editMode) {
+                                setEditingRow(os);
+                              } else {
+                                onCellTap(os.originalIdx, mi);
+                              }
+                            }}
                           />
                         );
                       })}
@@ -301,7 +352,6 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
             )}
           </div>
 
-          {/* Insert-section button between blocks (edit mode) */}
           {editMode && (
             <InsertSectionButton onClick={() => insertSection(bi)} />
           )}
@@ -335,6 +385,19 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
         </div>
       )}
 
+      {/* Row edit modal */}
+      {editingRow && (
+        <RowEditModal
+          os={editingRow}
+          semitones={semitones}
+          onSave={(chords, measures) => {
+            updateRow(editingRow.uid, chords, measures);
+            setEditingRow(null);
+          }}
+          onClose={() => setEditingRow(null)}
+        />
+      )}
+
       {activeChord && (
         <ChordDiagram
           chordName={activeChord}
@@ -346,7 +409,67 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   );
 }
 
-// ── InsertSectionButton ────────────────────────────────────────────────────
+// ── RowEditModal ───────────────────────────────────────────────────────────────
+function RowEditModal({ os, semitones, onSave, onClose }: {
+  os: OSection;
+  semitones: number;
+  onSave: (chords: string[], measures: string[]) => void;
+  onClose: () => void;
+}) {
+  const CELLS = 4;
+  const initChords   = [...os.section.chords,   '', '', '', ''].slice(0, CELLS);
+  const initMeasures = [...(os.section.measures ?? [os.section.lyrics ?? '']), '', '', '', ''].slice(0, CELLS);
+
+  const [chords,   setChords]   = useState(initChords);
+  const [measures, setMeasures] = useState(initMeasures);
+
+  function handleSave() {
+    let len = CELLS;
+    while (len > 0 && !chords[len - 1] && !measures[len - 1]) len--;
+    onSave(chords.slice(0, Math.max(len, 1)), measures.slice(0, Math.max(len, 1)));
+  }
+
+  function setChord(i: number, v: string) {
+    setChords(p => { const n = [...p]; n[i] = v.toUpperCase(); return n; });
+  }
+  function setMeasure(i: number, v: string) {
+    setMeasures(p => { const n = [...p]; n[i] = v; return n; });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-40 flex items-end justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl"
+        onClick={e => e.stopPropagation()}>
+        <h3 className="text-sm font-bold mb-3 text-gray-700">마디 편집</h3>
+        <div className="grid grid-cols-4 gap-1 mb-4">
+          {Array.from({ length: CELLS }).map((_, i) => (
+            <input key={`c${i}`}
+              value={chords[i]}
+              onChange={e => setChord(i, e.target.value)}
+              placeholder={['G', 'D', 'Em', 'C'][i]}
+              className="bg-indigo-50 text-indigo-700 font-bold text-sm px-1 py-1.5 rounded outline-none focus:bg-indigo-100 w-full text-center" />
+          ))}
+          {Array.from({ length: CELLS }).map((_, i) => (
+            <input key={`m${i}`}
+              value={measures[i]}
+              onChange={e => setMeasure(i, e.target.value)}
+              placeholder="가사"
+              className="bg-white text-gray-800 text-sm px-1 py-1.5 rounded border border-gray-100 outline-none focus:border-indigo-300 w-full" />
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleSave}
+            className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold">저장</button>
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm text-gray-400">취소</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── InsertSectionButton ────────────────────────────────────────────────────────
 function InsertSectionButton({ onClick }: { onClick: () => void }) {
   const [hover, setHover] = useState(false);
   return (
@@ -369,7 +492,7 @@ function InsertSectionButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-// ── LabelSpan ──────────────────────────────────────────────────────────────
+// ── LabelSpan ──────────────────────────────────────────────────────────────────
 function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => void }) {
   const lp = useLongPress(onLongPress);
   return (
@@ -379,8 +502,7 @@ function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => voi
   );
 }
 
-// ── MeasureCell ────────────────────────────────────────────────────────────
-// Corner rounding is handled by the parent container (overflow-hidden rounded-xl)
+// ── MeasureCell ────────────────────────────────────────────────────────────────
 function MeasureCell({
   cellKey, cellRefs, isCurrent, isRowSelected, chords, lyric, note, showNotes,
   editMode, onChordClick, onLongPress, onTap,
@@ -405,7 +527,7 @@ function MeasureCell({
     didLongPress.current = false;
     lp.onPointerDown({ ...e, preventDefault: () => { e.preventDefault(); didLongPress.current = true; } } as any);
   }
-  function handlePointerUp(e: React.PointerEvent) {
+  function handlePointerUp() {
     lp.onPointerUp();
     if (!didLongPress.current) onTap();
   }
@@ -421,6 +543,7 @@ function MeasureCell({
       className={`bg-white px-2 pb-2 transition-colors relative
         ${isCurrent     ? 'bg-indigo-50 ring-2 ring-inset ring-indigo-400' : ''}
         ${isRowSelected ? '!bg-amber-50 ring-1 ring-inset ring-amber-300' : ''}
+        ${editMode      ? 'cursor-pointer hover:bg-gray-50' : ''}
       `}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}

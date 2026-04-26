@@ -6,7 +6,8 @@ export interface SongEntry {
   title: string;
   artist: string;
   key: string;
-  folder?: string; // 폴더명 없으면 기본 목록
+  gender?: '남' | '여';
+  folder?: string;
 }
 
 export const SONGS: SongEntry[] = [
