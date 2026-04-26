@@ -669,13 +669,15 @@ function MeasureCell({
             const rawChord = chords.length > 0 ? chords[0] : '';
             const subParts = rawChord.includes('.') ? rawChord.split('.') : null;
             if (subParts) {
-              const nonEmpty = subParts.filter(Boolean);
+              // 4구간 고정 그리드: 각 . 위치가 빈 칸, 알파벳이 해당 위치 채움
+              const grid = [...subParts, '', '', '', ''].slice(0, 4);
               return (
-                <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
-                  {nonEmpty.map((p, i) => (
-                    <button key={i} onClick={e => { e.stopPropagation(); onChordClick(p); }}
-                      className="text-indigo-600 font-bold text-[11px] leading-none hover:underline active:opacity-60">
-                      {p}
+                <div className="grid grid-cols-2 gap-x-0.5 gap-y-0 mb-0.5" style={{ minHeight: '1.5rem' }}>
+                  {grid.map((p, i) => (
+                    <button key={i}
+                      onClick={e => { if (p) { e.stopPropagation(); onChordClick(p); } }}
+                      className={`text-[10px] leading-tight text-left truncate ${p ? 'text-indigo-600 font-bold hover:underline active:opacity-60' : 'pointer-events-none'}`}>
+                      {p || ' '}
                     </button>
                   ))}
                 </div>
