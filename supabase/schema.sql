@@ -14,6 +14,7 @@ create table if not exists songs (
 -- 기존 DB에 신규 컬럼 추가용 마이그레이션
 alter table songs add column if not exists bpm    integer default 80;
 alter table songs add column if not exists folder text;
+alter table songs add column if not exists notes  jsonb default '{}';
 
 alter table songs enable row level security;
 
