@@ -28,9 +28,12 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [showNotes, setShowNotes]         = useState(true);
   const [headerCollapsed, setHeaderRaw]   = useState(false);
   const [showHelp, setShowHelp]           = useState(false);
+  const [bpmToast, setBpmToast]           = useState(false);
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
 
-  const [bpm, setBpm]           = useState<number>((meta.bpm as number) || 80);
+  const rawBpm = (meta.bpm as number) || 0;
+  const [bpm, setBpm]           = useState<number>(rawBpm || 100);
+  const [bpmMissing]            = useState<boolean>(rawBpm === 0);
   const [bpmEditing, setBpmEd]  = useState(false);
   const [bpmDraft, setBpmDraft] = useState('');
 
@@ -152,6 +155,10 @@ export default function ViewerClient({ markdown, songId }: Props) {
   // ── Toggle play — starts from current cursor (playIdx), not from 0 ───────────
   function togglePlay() {
     if (phaseRef.current !== 'idle') { stopAll(); return; }
+    if (bpmMissing) {
+      setBpmToast(true);
+      setTimeout(() => setBpmToast(false), 3000);
+    }
     phaseRef.current = 'countIn';
     setIsCountingIn(true);
     launchBeatTicker();
@@ -200,6 +207,12 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* ── BPM 미설정 토스트 ──────────────────────────────────── */}
+      {bpmToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          BPM이 설정되지 않았어요. 100으로 시작합니다.
+        </div>
+      )}
       {/* ── Sticky header ─────────────────────────────────────── */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
