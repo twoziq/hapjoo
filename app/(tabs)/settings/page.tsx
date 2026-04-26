@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signOut, onAuthStateChange, supabaseConfigured } from '@/lib/supabase';
+import { signInWithGoogle, signInWithKakao, signOut, onAuthStateChange, supabaseConfigured } from '@/lib/supabase';
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
@@ -62,7 +62,7 @@ export default function SettingsPage() {
             </button>
           </div>
         ) : (
-          <div className="px-4 py-4">
+          <div className="px-4 py-4 space-y-2">
             <button
               onClick={() => signInWithGoogle()}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm"
@@ -74,6 +74,16 @@ export default function SettingsPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Google로 로그인
+            </button>
+            <button
+              onClick={() => signInWithKakao()}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm"
+              style={{ backgroundColor: '#FEE500', color: '#000000CC' }}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3C6.477 3 2 6.477 2 10.5c0 2.632 1.553 4.95 3.9 6.3l-.993 3.697a.3.3 0 0 0 .434.338L9.74 18.54A11.3 11.3 0 0 0 12 18.75c5.523 0 10-3.477 10-7.75S17.523 3 12 3z"/>
+              </svg>
+              카카오로 로그인
             </button>
           </div>
         )}
