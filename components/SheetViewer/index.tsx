@@ -21,10 +21,6 @@ interface Props {
 interface OSection { uid: string; section: SheetSection; originalIdx: number }
 interface Block    { id: string; label: OSection | null; rows: OSection[] }
 
-let _uid = 0;
-function makeOS(sections: SheetSection[]): OSection[] {
-  return sections.map((s, i) => ({ uid: `s${_uid++}`, section: { ...s }, originalIdx: i }));
-}
 
 function toBlocks(list: OSection[]): Block[] {
   const out: Block[] = [];
@@ -47,7 +43,10 @@ function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function SheetViewer({ sections, semitones, currentPos, cursorActive, showNotes, songId, isPlaying, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
-  const [oSections]                   = useState<OSection[]>(() => makeOS(sections));
+  const [oSections] = useState<OSection[]>(() => {
+    let uid = 0;
+    return sections.map((s, i) => ({ uid: `s${uid++}`, section: { ...s }, originalIdx: i }));
+  });
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
 

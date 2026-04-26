@@ -41,7 +41,4 @@ export function transposeChord(chordName: string, semitones: number): string {
   return transposeSingle(chordName, semitones);
 }
 
-export function getFemaleKeyOffset(originalKey: string): number {
-  // 보통 여자키는 +5 또는 -7
-  return 5;
-}
+export const FEMALE_KEY_OFFSET = 5;

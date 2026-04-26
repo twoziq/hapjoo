@@ -24,7 +24,7 @@ export function scanSongs(): DiscoveredSong[] {
 
   let entries: fs.Dirent[];
   try { entries = fs.readdirSync(SONGS_DIR, { withFileTypes: true }); }
-  catch { return songs; }
+  catch (e) { console.error('[songLoader] readdir failed:', e); return songs; }
 
   // Root .txt files first
   for (const e of entries) {
@@ -32,7 +32,7 @@ export function scanSongs(): DiscoveredSong[] {
       try {
         const content = fs.readFileSync(path.join(SONGS_DIR, e.name), 'utf8');
         songs.push({ id: e.name.replace(/\.txt$/, ''), ...parseMeta(content), folder: null });
-      } catch {}
+      } catch (e) { console.error('[songLoader] read failed:', e); }
     }
   }
 
@@ -47,10 +47,10 @@ export function scanSongs(): DiscoveredSong[] {
             try {
               const content = fs.readFileSync(path.join(folderPath, sub.name), 'utf8');
               songs.push({ id: sub.name.replace(/\.txt$/, ''), ...parseMeta(content), folder: e.name });
-            } catch {}
+            } catch (e) { console.error('[songLoader] read failed:', e); }
           }
         }
-      } catch {}
+      } catch (e) { console.error('[songLoader] subfolder readdir failed:', e); }
     }
   }
 
