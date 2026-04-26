@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { getSongsByFolder, type SongEntry } from '@/data/songs/index';
+import AuthButton from '@/components/AuthButton';
 
 export default function SongsPage() {
   const [query, setQuery] = useState('');
@@ -19,10 +20,13 @@ export default function SongsPage() {
     <div className="p-4 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">악보 목록</h1>
-        <Link href="/songs/new"
-          className="text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white">
-          + 악보 추가
-        </Link>
+        <div className="flex items-center gap-2">
+          <AuthButton />
+          <Link href="/songs/new"
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white">
+            + 악보 추가
+          </Link>
+        </div>
       </div>
 
       <input

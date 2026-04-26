@@ -38,6 +38,29 @@ insert into songs (id, title, artist, key, capo, bpm, content) values
 )
 on conflict (id) do nothing;
 
+-- User songs (개인 튜닝 저장)
+create table if not exists user_songs (
+  id         uuid default gen_random_uuid() primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  song_id    text not null references songs(id) on delete cascade,
+  semitones  integer default 0,
+  notes      jsonb default '{}',
+  content    text,   -- 커스텀 악보 (null = 원본 사용)
+  created_at timestamptz default now(),
+  unique(user_id, song_id)
+);
+
+alter table user_songs enable row level security;
+
+create policy "Users read own songs"
+  on user_songs for select using (auth.uid() = user_id);
+create policy "Users insert own songs"
+  on user_songs for insert with check (auth.uid() = user_id);
+create policy "Users update own songs"
+  on user_songs for update using (auth.uid() = user_id);
+create policy "Users delete own songs"
+  on user_songs for delete using (auth.uid() = user_id);
+
 -- Rooms table (합주 모드 – Supabase Realtime으로 실시간 동기화)
 create table if not exists rooms (
   id          uuid primary key default gen_random_uuid(),

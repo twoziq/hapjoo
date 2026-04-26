@@ -85,20 +85,20 @@ export default function ViewerClient({ markdown, songId }: Props) {
   // ── Stop everything ────────────────────────────────────────────
   function stopAll() {
     if (beatTimerRef.current) { clearInterval(beatTimerRef.current); beatTimerRef.current = null; }
+    if (beatTimerRef2.current) { clearTimeout(beatTimerRef2.current); beatTimerRef2.current = null; }
     phaseRef.current = 'idle';
     setIsPlaying(false);
     setIsCountingIn(false);
     setBeatState({ beat: -1, tick: 0 });
   }
 
-  // ── Beat ticker — drives both metronome AND measure advance ────
-  function launchBeatTicker() {
-    if (beatTimerRef.current) clearInterval(beatTimerRef.current);
-    countInCountRef.current  = 0;
-    playBeatCountRef.current = 0;
-    setBeatState({ beat: 0, tick: 1 });
+  // ── Beat ticker — recursive setTimeout so BPM changes take effect each beat ──
+  const beatTimerRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    beatTimerRef.current = setInterval(() => {
+  function scheduleTick() {
+    beatTimerRef2.current = setTimeout(() => {
+      if (phaseRef.current === 'idle') return;
+
       setBeatState(prev => ({
         beat: (prev.beat + 1) % beatsPerBarRef.current,
         tick: prev.tick + 1,
@@ -113,44 +113,49 @@ export default function ViewerClient({ markdown, songId }: Props) {
           countInCountRef.current  = 0;
           playBeatCountRef.current = 0;
         }
-        return;
-      }
-
-      if (phaseRef.current === 'playing') {
+      } else if (phaseRef.current === 'playing') {
         playBeatCountRef.current++;
         if (playBeatCountRef.current >= beatsPerBarRef.current) {
           playBeatCountRef.current = 0;
           const next = playIdxRef.current + 1;
           if (next >= flatMeasuresRef.current.length) {
             stopAll();
+            seekTo(0);
+            return;
           } else {
             playIdxRef.current = next;
             setPlayIdx(next);
           }
         }
       }
+
+      scheduleTick();
     }, beatIntervalRef.current);
   }
 
-  // ── Toggle play ────────────────────────────────────────────────
+  function launchBeatTicker() {
+    if (beatTimerRef.current) clearInterval(beatTimerRef.current);
+    if (beatTimerRef2.current) clearTimeout(beatTimerRef2.current);
+    countInCountRef.current  = 0;
+    playBeatCountRef.current = 0;
+    setBeatState({ beat: 0, tick: 1 });
+    scheduleTick();
+  }
+
+  // ── Toggle play — starts from current cursor (playIdx), not from 0 ───────────
   function togglePlay() {
     if (phaseRef.current !== 'idle') { stopAll(); return; }
-    seekTo(0);
     phaseRef.current = 'countIn';
     setIsCountingIn(true);
     launchBeatTicker();
   }
 
+  // ── Click cell: just seek cursor, don't auto-play ─────────────────────────
   function onCellTap(si: number, mi: number) {
     const idx = flatMeasures.findIndex(m => m.si === si && m.mi === mi);
     if (idx < 0) return;
     seekTo(idx);
-    if (phaseRef.current === 'idle') {
-      playBeatCountRef.current = 0;
-      phaseRef.current = 'playing';
-      setIsPlaying(true);
-      launchBeatTicker();
-    }
+    // If already playing, continue from new position (ticker keeps running)
   }
 
   // ── BPM editing ───────────────────────────────────────────────
@@ -176,7 +181,8 @@ export default function ViewerClient({ markdown, songId }: Props) {
   function tsDown() { tsLongRef.current = setTimeout(() => setTsOpen(true), 500); }
   function tsUp()   { if (tsLongRef.current) clearTimeout(tsLongRef.current); }
 
-  const currentPos = (isPlaying || isCountingIn) ? (flatMeasures[playIdx] ?? null) : null;
+  const currentPos = flatMeasures[playIdx] ?? null;
+  const cursorActive = isPlaying || isCountingIn;
   const currentKey = transposeNote((meta.key as string) ?? 'C', semitones);
   const beatsPerBar = getBeatsPerBar(timeSig);
   const showBeatBar = isPlaying || isCountingIn;
@@ -238,23 +244,27 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
           {/* Row 2: controls (collapsible) */}
           {!headerCollapsed && (
-            <div className="flex items-center gap-1">
-              {/* Key transpose */}
-              <button onClick={() => setSemitones(s => s - 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200">−</button>
-              <span className="text-sm font-black text-indigo-600 w-7 text-center">{currentKey}</span>
-              <button onClick={() => setSemitones(s => s + 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200">+</button>
-
-              {/* 남/여 버튼 */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {/* 남/여 키 버튼 + 미세조정 */}
               <button onClick={() => setSemitones(maleSemi)}
-                className={`text-[10px] px-2 h-6 rounded-full font-semibold ml-1 ${semitones === maleSemi ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
-                남
-              </button>
+                className={`text-[11px] px-2.5 h-7 rounded-l-full font-bold transition-colors border ${
+                  semitones === maleSemi
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-gray-100 text-gray-500 border-gray-200'
+                }`}>남</button>
               <button onClick={() => setSemitones(femaleSemi)}
-                className={`text-[10px] px-2 h-6 rounded-full font-semibold ${semitones === femaleSemi ? 'bg-pink-100 text-pink-500' : 'bg-gray-100 text-gray-400'}`}>
-                여
-              </button>
+                className={`text-[11px] px-2.5 h-7 rounded-r-full font-bold transition-colors border-t border-b border-r ${
+                  semitones === femaleSemi
+                    ? 'bg-pink-500 text-white border-pink-500'
+                    : 'bg-gray-100 text-gray-500 border-gray-200'
+                }`}>여</button>
+
+              {/* 키 미세조정 */}
+              <button onClick={() => setSemitones(s => s - 1)}
+                className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-xs font-bold active:bg-gray-200 ml-1">−</button>
+              <span className="text-sm font-black text-indigo-600 w-6 text-center">{currentKey}</span>
+              <button onClick={() => setSemitones(s => s + 1)}
+                className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-xs font-bold active:bg-gray-200">+</button>
 
               <div className="flex-1" />
 
@@ -326,6 +336,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
             sections={sections}
             semitones={semitones}
             currentPos={currentPos}
+            cursorActive={cursorActive}
             showNotes={showNotes}
             songId={songId}
             isPlaying={isPlaying}

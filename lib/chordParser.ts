@@ -11,6 +11,7 @@ export interface SheetSection {
   chords: string[];
   lyrics: string;
   measures: string[];
+  restFrom?: number; // index where // padding begins (rest cells)
 }
 
 export interface ParsedSheet {
@@ -64,11 +65,12 @@ function parseMeasureLine(line: string): SheetSection {
     measures.push(lyric);
   }
 
+  const restFrom = padTo4 && chords.length < 4 ? chords.length : undefined;
   if (padTo4) {
     while (chords.length < 4) { chords.push(''); measures.push(''); }
   }
 
-  return { chords, lyrics: measures.join(' | '), measures };
+  return { chords, lyrics: measures.join(' | '), measures, restFrom };
 }
 
 // ── Frontmatter parser ────────────────────────────────────────────────────────

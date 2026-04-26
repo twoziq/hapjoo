@@ -10,6 +10,7 @@ interface Props {
   sections: SheetSection[];
   semitones: number;
   currentPos: { si: number; mi: number } | null;
+  cursorActive: boolean; // true = playing/counting, false = parked cursor
   showNotes: boolean;
   songId: string;
   isPlaying: boolean;
@@ -59,7 +60,7 @@ function useLongPress(cb: () => void, ms = 500) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export default function SheetViewer({ sections, semitones, currentPos, showNotes, songId, isPlaying, editMode, setEditMode, onCellTap }: Props) {
+export default function SheetViewer({ sections, semitones, currentPos, cursorActive, showNotes, songId, isPlaying, editMode, setEditMode, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
   const [oSections, setOSections]     = useState<OSection[]>(() => makeOS(sections));
   const [labels, setLabels]           = useState<Record<string, string>>({});
@@ -324,6 +325,8 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
                             cellKey={key}
                             cellRefs={cellRefs}
                             isCurrent={isCur}
+                            cursorActive={cursorActive}
+                            isRest={os.section.restFrom !== undefined && mi >= os.section.restFrom}
                             isRowSelected={isRowSel}
                             chords={barChords}
                             lyric={lyric}
@@ -504,12 +507,14 @@ function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => voi
 
 // ── MeasureCell ────────────────────────────────────────────────────────────────
 function MeasureCell({
-  cellKey, cellRefs, isCurrent, isRowSelected, chords, lyric, note, showNotes,
+  cellKey, cellRefs, isCurrent, cursorActive, isRest, isRowSelected, chords, lyric, note, showNotes,
   editMode, onChordClick, onLongPress, onTap,
 }: {
   cellKey: string;
   cellRefs: React.MutableRefObject<Map<string, HTMLElement>>;
   isCurrent: boolean;
+  cursorActive: boolean;
+  isRest: boolean;
   isRowSelected: boolean;
   chords: string[];
   lyric: string;
@@ -537,13 +542,22 @@ function MeasureCell({
     else    cellRefs.current.delete(cellKey);
   }, [cellKey]);
 
+  const cursorClass = isCurrent
+    ? cursorActive
+      ? 'bg-indigo-50 ring-2 ring-inset ring-indigo-400'
+      : 'bg-amber-50 ring-2 ring-inset ring-amber-300'
+    : isRest
+    ? 'bg-gray-50'
+    : 'bg-white';
+
   return (
     <div
       ref={setRef as any}
-      className={`bg-white px-2 pb-2 transition-colors relative
-        ${isCurrent     ? 'bg-indigo-50 ring-2 ring-inset ring-indigo-400' : ''}
+      className={`px-2 pb-2 transition-colors relative
+        ${cursorClass}
         ${isRowSelected ? '!bg-amber-50 ring-1 ring-inset ring-amber-300' : ''}
-        ${editMode      ? 'cursor-pointer hover:bg-gray-50' : ''}
+        ${editMode && !isRest ? 'cursor-pointer hover:bg-gray-50' : ''}
+        ${isRest ? 'pointer-events-none' : ''}
       `}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -569,18 +583,25 @@ function MeasureCell({
         <div className="pt-1.5" />
       )}
 
-      <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
-        {chords.map((chord, i) => (
-          <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
-            className="text-indigo-600 font-bold text-[13px] leading-none hover:underline active:opacity-60">
-            {chord}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-[13px] text-gray-800 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
-        {lyric || ' '}
-      </p>
+      {isRest ? (
+        <div className="flex items-center justify-center min-h-[2.5rem] text-gray-300 text-base select-none">
+          /
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
+            {chords.map((chord, i) => (
+              <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
+                className="text-indigo-600 font-bold text-[13px] leading-none hover:underline active:opacity-60">
+                {chord}
+              </button>
+            ))}
+          </div>
+          <p className="text-[13px] text-gray-800 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
+            {lyric || ' '}
+          </p>
+        </>
+      )}
     </div>
   );
 }

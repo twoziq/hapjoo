@@ -417,7 +417,7 @@ function RowEditor({ row, rowIdx, totalRows, onRemove, onChange, onChordBatch, d
             onClick={e => (e.currentTarget as HTMLInputElement).focus()}
             placeholder={['G', 'D', 'Em', 'Am'][mi]}
             style={{ gridColumn: mi + 1, gridRow: 1 }}
-            className="bg-indigo-50 text-indigo-700 font-bold text-sm rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full"
+            className="bg-indigo-50 text-indigo-700 font-bold text-sm rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full text-left"
           />
         ))}
         {/* Lyric inputs */}
@@ -426,10 +426,12 @@ function RowEditor({ row, rowIdx, totalRows, onRemove, onChange, onChordBatch, d
             key={`l_${mi}`}
             type="text"
             value={m.lyric}
+            tabIndex={-1}
             onChange={e => onChange(mi, { lyric: e.target.value })}
+            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
             placeholder="가사"
             style={{ gridColumn: mi + 1, gridRow: 2 }}
-            className="bg-white text-gray-800 text-sm border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full"
+            className="bg-white text-gray-800 text-sm border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full text-left"
           />
         ))}
       </div>
