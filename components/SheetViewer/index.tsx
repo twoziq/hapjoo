@@ -5,6 +5,7 @@ import { transposeChord } from '@/lib/transpose';
 import ChordDiagram from '@/components/ChordDiagram';
 import chordDB from '@/data/chords.json';
 import type { SheetSection } from '@/lib/chordParser';
+import { dbGetSongNotes, dbSaveSongNotes } from '@/lib/supabase';
 
 interface Props {
   sections: SheetSection[];
@@ -43,16 +44,6 @@ function toBlocks(list: OSection[]): Block[] {
 
 function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}`; }
 
-function useLongPress(cb: () => void, ms = 500) {
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  return {
-    onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); t.current = setTimeout(cb, ms); },
-    onPointerUp:     () => { if (t.current) clearTimeout(t.current); },
-    onPointerCancel: () => { if (t.current) clearTimeout(t.current); },
-    onPointerLeave:  () => { if (t.current) clearTimeout(t.current); },
-  };
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function SheetViewer({ sections, semitones, currentPos, cursorActive, showNotes, songId, isPlaying, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
@@ -60,15 +51,29 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
 
+  // Notes: loaded from localStorage immediately, then synced from Supabase (shared)
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`hapjoo_notes_${songId}`) ?? '{}'); }
     catch { return {}; }
   });
 
+  // Sync shared notes from Supabase on mount
+  useEffect(() => {
+    dbGetSongNotes(songId).then(shared => {
+      if (shared && Object.keys(shared).length > 0) {
+        setNotes(shared);
+        try { localStorage.setItem(`hapjoo_notes_${songId}`, JSON.stringify(shared)); } catch {}
+      }
+    });
+  }, [songId]);
+
   function persistNotes(next: Record<string, string>) {
     setNotes(next);
     try { localStorage.setItem(`hapjoo_notes_${songId}`, JSON.stringify(next)); } catch {}
+    // Fire-and-forget to Supabase for team sharing
+    dbSaveSongNotes(songId, next);
   }
+
   function saveNote(origIdx: number, mi: number, text: string) {
     const k = noteKey(origIdx, mi);
     const next = { ...notes };
@@ -90,11 +95,9 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
 
   return (
     <div className="pb-4">
-      {/* Blocks */}
       {blocks.map((block) => (
         <div key={block.id}>
           <div className="mb-3">
-            {/* Section label */}
             {block.label && (
               <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
                 <span className="text-[11px] font-bold text-gray-400 tracking-widest uppercase select-none">
@@ -119,14 +122,14 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
                           const barChords = oneToOne
                             ? (chords[mi] ? [chords[mi]] : [])
                             : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
-                          const key  = `${os.uid}_${mi}`;
-                          const nk   = noteKey(os.originalIdx, mi);
-                          const note = os.originalIdx >= 0 ? notes[nk] : undefined;
-                          const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
+                          const cellKey = `${os.uid}_${mi}`;
+                          const nk      = noteKey(os.originalIdx, mi);
+                          const note    = os.originalIdx >= 0 ? notes[nk] : undefined;
+                          const isCur   = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
                           return (
                             <MeasureCell
-                              key={key}
-                              cellKey={key}
+                              key={cellKey}
+                              cellKey={cellKey}
                               cellRefs={cellRefs}
                               isCurrent={isCur}
                               cursorActive={cursorActive}
@@ -136,7 +139,10 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
                               note={note}
                               showNotes={showNotes}
                               onChordClick={setActiveChord}
-                              onLongPress={() => { setActiveNote({ origIdx: os.originalIdx, mi }); setNoteDraft(notes[nk] ?? ''); }}
+                              onLongPress={() => {
+                                setActiveNote({ origIdx: os.originalIdx, mi });
+                                setNoteDraft(notes[nk] ?? '');
+                              }}
                               onTap={() => onCellTap(os.originalIdx, mi)}
                             />
                           );
@@ -190,6 +196,7 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
 }
 
 // ── MeasureCell ────────────────────────────────────────────────────────────────
+// 짧게 탭 → 재생 커서 이동 / 꾹 누르기(500ms) → 메모 입력
 function MeasureCell({
   cellKey, cellRefs, isCurrent, cursorActive, isRest, chords, lyric, note, showNotes,
   onChordClick, onLongPress, onTap,
@@ -207,16 +214,27 @@ function MeasureCell({
   onLongPress: () => void;
   onTap: () => void;
 }) {
-  const lp = useLongPress(onLongPress);
-  const didLongPress = useRef(false);
+  const timerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasLongPress  = useRef(false);
 
   function handlePointerDown(e: React.PointerEvent) {
-    didLongPress.current = false;
-    lp.onPointerDown({ ...e, preventDefault: () => { e.preventDefault(); didLongPress.current = true; } } as any);
+    if (isRest) return;
+    e.preventDefault();
+    wasLongPress.current = false;
+    timerRef.current = setTimeout(() => {
+      wasLongPress.current = true;
+      onLongPress();
+    }, 500);
   }
+
   function handlePointerUp() {
-    lp.onPointerUp();
-    if (!didLongPress.current) onTap();
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (!wasLongPress.current) onTap();
+  }
+
+  function handlePointerCancel() {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    wasLongPress.current = false;
   }
 
   const setRef = useCallback((el: HTMLElement | null) => {
@@ -235,14 +253,14 @@ function MeasureCell({
   return (
     <div
       ref={setRef as any}
-      className={`px-2 pb-2 transition-colors relative
+      className={`px-2 pb-2 transition-colors relative touch-none select-none
         ${cursorClass}
-        ${isRest ? 'pointer-events-none' : ''}
+        ${isRest ? 'pointer-events-none' : 'cursor-pointer'}
       `}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      onPointerCancel={lp.onPointerCancel}
-      onPointerLeave={lp.onPointerLeave}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={handlePointerCancel}
     >
       {note ? (
         <div className="flex flex-col items-center mb-0.5 pt-1">
@@ -278,6 +296,7 @@ function MeasureCell({
                 <div className="grid grid-cols-2 gap-x-0.5 gap-y-0 mb-0.5" style={{ minHeight: '1.5rem' }}>
                   {grid.map((p, i) => (
                     <button key={i}
+                      onPointerDown={e => e.stopPropagation()}
                       onClick={e => { if (p) { e.stopPropagation(); onChordClick(p); } }}
                       className={`text-[10px] leading-tight text-left truncate ${p ? 'text-indigo-600 font-bold hover:underline active:opacity-60' : 'pointer-events-none'}`}>
                       {p || ' '}
@@ -289,7 +308,9 @@ function MeasureCell({
             return (
               <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
                 {chords.map((chord, i) => (
-                  <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
+                  <button key={i}
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); onChordClick(chord); }}
                     className="text-indigo-600 font-bold text-[13px] leading-none hover:underline active:opacity-60">
                     {chord}
                   </button>

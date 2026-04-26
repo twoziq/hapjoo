@@ -55,6 +55,20 @@ export async function dbUpdateSong(id: string, patch: Partial<Omit<DbSong, 'id' 
   return error?.message ?? null;
 }
 
+export async function dbGetSongNotes(songId: string): Promise<Record<string, string> | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('songs').select('notes').eq('id', songId).single();
+    if (error) return null;
+    return (data?.notes as Record<string, string>) ?? null;
+  } catch { return null; }
+}
+
+export async function dbSaveSongNotes(songId: string, notes: Record<string, string>): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('songs').update({ notes }).eq('id', songId); } catch {}
+}
+
 export async function dbDeleteSong(id: string): Promise<string | null> {
   if (!supabase) return 'Supabase not configured';
   const { error } = await supabase.from('songs').delete().eq('id', id);
