@@ -50,8 +50,8 @@ export function normalizeChord(raw: string): string {
 }
 
 // ── Inline measure line parser ────────────────────────────────────────────────
-// Format: "G lyric / D lyric / Em lyric / Bm lyric //"
-// Each segment = optional chord + optional lyric text
+// Format: "[G.]lyric | [D.]lyric | [Em.]lyric | [C.]lyric |"  (|| = pad to 4)
+// Each segment = optional chord bracket + optional lyric text
 const SEG_CHORD = /^([a-gA-G][b#]?(?:maj7?|M7?|m7?|7|9|11|13|6|sus[24]?|dim7?|aug|add[0-9]+|\(add[0-9]+\)|\([b#][0-9]+\))*(?:\/[a-gA-G][b#]?)?)(\s+(.*))?$/;
 
 function parseSegment(seg: string): { chord: string; lyric: string } {
@@ -212,7 +212,7 @@ function parseBody(body: string): SheetSection[] {
       continue;
     }
 
-    // ── Measure line containing / (new bracket format or old slash format) ──────
+    // ── Measure line: [코드.]가사 | [코드.]가사 | ... ───────────────────────────
     if (line.includes('|')) {
       pendingChords = [];
       addRow(parseMeasureLine(line));
