@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { parseSheet } from '@/lib/chordParser';
 import { transposeNote } from '@/lib/transpose';
 import SheetViewer from '@/components/SheetViewer';
@@ -20,6 +21,7 @@ function getBeatIntervalMs(ts: TimeSig, bpm: number): number {
 }
 
 export default function ViewerClient({ markdown, songId }: Props) {
+  const router = useRouter();
   const [semitones, setSemitones]         = useState(() => {
     try { return parseInt(localStorage.getItem(`hapjoo_semi_${songId}`) ?? '0', 10) || 0; } catch { return 0; }
   });
@@ -35,8 +37,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [timeSig, setTimeSig]    = useState<TimeSig>('4/4');
   const [timeSigOpen, setTsOpen] = useState(false);
   const tsLongRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [editMode, setEditMode] = useState(false);
 
   // Playback
   const [isPlaying, setIsPlaying]       = useState(false);
@@ -181,7 +181,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
   // ── Header collapse ────────────────────────────────────────────
   function setHeader(collapsed: boolean) {
     setHeaderRaw(collapsed);
-    if (collapsed) setEditMode(false);
   }
 
   // ── Time sig long-press ────────────────────────────────────────
@@ -239,6 +238,8 @@ export default function ViewerClient({ markdown, songId }: Props) {
             )}
             <button onClick={() => setShowHelp(true)}
               className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xs font-bold shrink-0">?</button>
+            <button onClick={() => router.push(`/viewer/${songId}/edit`)}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0">✎</button>
             <button onClick={() => setHeader(!headerCollapsed)}
               className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0">
               {headerCollapsed ? (
@@ -347,8 +348,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
             showNotes={showNotes}
             songId={songId}
             isPlaying={isPlaying}
-            editMode={editMode}
-            setEditMode={setEditMode}
             onCellTap={onCellTap}
           />
         </div>
@@ -371,10 +370,8 @@ export default function ViewerClient({ markdown, songId }: Props) {
               <HelpRow icon="↯" title="BPM 꾹 누르기">BPM 숫자를 길게 누르면 직접 입력. +/- 버튼으로 1씩 조절.</HelpRow>
               <HelpRow icon="남/여" title="키 전환">남/여 버튼으로 키 전환. 곡에 성별이 지정된 경우 해당 키로 설정됨.</HelpRow>
               <HelpRow icon="접기" title="헤더 접기">접기/펼치기 버튼으로 상단 컨트롤 토글.</HelpRow>
-              <HelpRow icon="💬" title="마디 꾹 누르기 (일반 모드)">메모 입력 → 말풍선으로 표시.</HelpRow>
-              <HelpRow icon="✎" title="편집 모드">
-                {'• 섹션 이름 꾹 누르기 → 이름 변경\n• ⠿ 핸들 드래그 → 블록 순서 이동\n• ⊕ 블록 복사\n• ✕ 블록 삭제\n• 마디 탭 → 코드/가사 편집\n• 마디 꾹 누르기 → 행 선택 후 구간 이름 붙이기\n• 블록 사이 + 버튼 → 새 구간 추가\n• 원본 복귀 버튼으로 초기화'}
-              </HelpRow>
+              <HelpRow icon="💬" title="마디 꾹 누르기">메모 입력 → 말풍선으로 표시.</HelpRow>
+              <HelpRow icon="✎" title="악보 편집">✎ 버튼을 누르면 악보 편집 화면으로 이동. 제목·BPM·키·구간·줄·코드·가사 모두 수정 가능. 저장하면 뷰어로 돌아옴.</HelpRow>
             </div>
           </div>
         </div>

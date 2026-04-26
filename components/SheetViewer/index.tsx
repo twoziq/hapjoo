@@ -10,12 +10,10 @@ interface Props {
   sections: SheetSection[];
   semitones: number;
   currentPos: { si: number; mi: number } | null;
-  cursorActive: boolean; // true = playing/counting, false = parked cursor
+  cursorActive: boolean;
   showNotes: boolean;
   songId: string;
   isPlaying: boolean;
-  editMode: boolean;
-  setEditMode: (v: boolean) => void;
   onCellTap: (si: number, mi: number) => void;
 }
 
@@ -43,34 +41,7 @@ function toBlocks(list: OSection[]): Block[] {
   return out;
 }
 
-function flatten(blocks: Block[]): OSection[] {
-  return blocks.flatMap(b => [...(b.label ? [b.label] : []), ...b.rows]);
-}
-
 function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}`; }
-
-// ── Smart chord parser (shared with new-song page) ────────────────────────────
-const CHORD_RX = /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+)*(?:\/[A-G][b#]?)?/gi;
-function parseSmartChord(raw: string): string[] | null {
-  const val = raw.trim();
-  if (!val) return null;
-  if (val.includes('.')) {
-    const result = ['', '', '', ''];
-    let pos = 0; let i = 0;
-    while (i < val.length && pos < 4) {
-      if (val[i] === '.') { pos++; i++; continue; }
-      const m = val.slice(i).match(new RegExp('^(' + CHORD_RX.source + ')', 'i'));
-      if (m) { result[pos] = m[1].toUpperCase(); pos++; i += m[1].length; }
-      else i++;
-    }
-    return result;
-  }
-  const matches = [...val.matchAll(CHORD_RX)].map(m => m[0]);
-  if (matches.length < 2) return null;
-  const result = ['', '', '', ''];
-  matches.slice(0, 4).forEach((c, idx) => { result[idx] = c; });
-  return result;
-}
 
 function useLongPress(cb: () => void, ms = 500) {
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,28 +54,11 @@ function useLongPress(cb: () => void, ms = 500) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export default function SheetViewer({ sections, semitones, currentPos, cursorActive, showNotes, songId, isPlaying, editMode, setEditMode, onCellTap }: Props) {
+export default function SheetViewer({ sections, semitones, currentPos, cursorActive, showNotes, songId, isPlaying, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
-  const [oSections, setOSections]     = useState<OSection[]>(() => makeOS(sections));
-  const [labels, setLabels]           = useState<Record<string, string>>({});
-  const [selected, setSelected]       = useState<Set<string>>(new Set());
-  const [subActive, setSubActive]     = useState(false);
-  const [subInput, setSubInput]       = useState('');
-  const [editingUid, setEditingUid]   = useState<string | null>(null);
-  const [labelDraft, setLabelDraft]   = useState('');
+  const [oSections]                   = useState<OSection[]>(() => makeOS(sections));
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
-  const [animBlockIds, setAnimBlockIds] = useState<Set<string>>(new Set());
-
-  // Block drag state
-  const [activeDrag, setActiveDrag]   = useState<{ fromBi: number } | null>(null);
-  const [dragOverBi, setDragOverBi]   = useState<number | null>(null);
-  const blockDivRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  // Row drag state
-  const [rowDrag, setRowDrag]         = useState<{ bi: number; fromRi: number } | null>(null);
-  const [rowDragOver, setRowDragOver] = useState<{ bi: number; ri: number } | null>(null);
-  const rowDivRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`hapjoo_notes_${songId}`) ?? '{}'); }
@@ -132,280 +86,26 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
 
   const blocks = toBlocks(oSections);
 
-  // ── Block operations ───────────────────────────────────────────
-  function moveBlockTo(from: number, to: number) {
-    const nb = [...blocks];
-    const [removed] = nb.splice(from, 1);
-    nb.splice(to, 0, removed);
-    setOSections(flatten(nb));
-  }
-
-  function insertRow(bi: number) {
-    const uid = `row_${Date.now()}`;
-    const newOS: OSection = {
-      uid,
-      originalIdx: -1,
-      section: { chords: ['', '', '', ''], lyrics: '', measures: ['', '', '', ''] },
-    };
-    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
-    nb[bi].rows.push(newOS);
-    setOSections(flatten(nb));
-  }
-
-  function moveRowTo(bi: number, fromRi: number, toRi: number) {
-    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
-    const [removed] = nb[bi].rows.splice(fromRi, 1);
-    nb[bi].rows.splice(toRi, 0, removed);
-    setOSections(flatten(nb));
-  }
-
-  function removeRowFromBlock(bi: number, ri: number) {
-    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
-    nb[bi].rows.splice(ri, 1);
-    setOSections(flatten(nb));
-  }
-
-  function copyBlock(bi: number) {
-    const b = blocks[bi]; const ts = Date.now();
-    const copied: Block = {
-      id: `cp_${ts}`,
-      label: b.label ? { ...b.label, uid: `cp_l_${ts}`, section: { ...b.label.section } } : null,
-      rows: b.rows.map((r, i) => ({ ...r, uid: `cp_r_${ts}_${i}`, originalIdx: -1, section: { ...r.section } })),
-    };
-    const nb = [...blocks];
-    nb.splice(bi + 1, 0, copied);
-    setOSections(flatten(nb));
-  }
-
-  function deleteBlock(bi: number) {
-    const nb = [...blocks];
-    nb.splice(bi, 1);
-    setOSections(flatten(nb));
-  }
-
-  function resetToOriginal() {
-    setOSections(makeOS(sections));
-    setLabels({});
-    setSelected(new Set());
-    setSubActive(false);
-    setEditMode(false);
-  }
-
-  function insertSection(afterBi: number) {
-    const uid = `new_${Date.now()}`;
-    const newOS: OSection = {
-      uid,
-      originalIdx: -1,
-      section: { chords: [], lyrics: '새 구간', measures: ['새 구간'] },
-    };
-    const newBlock: Block = { id: uid, label: newOS, rows: [] };
-    const nb = [...blocks];
-    nb.splice(afterBi + 1, 0, newBlock);
-    setOSections(flatten(nb));
-    setAnimBlockIds(prev => new Set([...prev, uid]));
-    setTimeout(() => setAnimBlockIds(prev => { const n = new Set(prev); n.delete(uid); return n; }), 500);
-    setLabelDraft('새 구간');
-    setEditingUid(uid);
-  }
-
-  function createSubLabel() {
-    if (!subInput.trim() || !selected.size) return;
-    const next: OSection[] = []; let done = false;
-    for (const os of oSections) {
-      if (selected.has(os.uid) && !done) {
-        next.push({ uid: `sub_${Date.now()}`, originalIdx: -1, section: { chords: [], lyrics: subInput.trim(), measures: [subInput.trim()] } });
-        done = true;
-      }
-      next.push(os);
-    }
-    setOSections(next);
-    setSelected(new Set()); setSubActive(false); setSubInput('');
-  }
-
-  function commitLabel(uid: string, val: string) {
-    setLabels(prev => ({ ...prev, [uid]: val }));
-    setEditingUid(null);
-  }
-
-  function updateRow(uid: string, chords: string[], measures: string[]) {
-    setOSections(prev => prev.map(s =>
-      s.uid === uid
-        ? { ...s, section: { ...s.section, chords, measures, lyrics: measures.join(' | ') } }
-        : s
-    ));
-  }
-
-  // ── Row drag handlers ──────────────────────────────────────────
-  function handleRowDragPointerDown(e: React.PointerEvent, bi: number, ri: number) {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setRowDrag({ bi, fromRi: ri });
-    setRowDragOver({ bi, ri });
-  }
-
-  function handleRowDragPointerMove(e: React.PointerEvent, bi: number) {
-    if (!rowDrag || rowDrag.bi !== bi) return;
-    const y = e.clientY;
-    const rows = blocks[bi].rows;
-    for (let ri = 0; ri < rows.length; ri++) {
-      const el = rowDivRefs.current.get(rows[ri].uid);
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (y >= rect.top && y < rect.bottom) { setRowDragOver({ bi, ri }); break; }
-    }
-  }
-
-  function handleRowDragPointerUp() {
-    if (rowDrag && rowDragOver && rowDragOver.bi === rowDrag.bi && rowDragOver.ri !== rowDrag.fromRi) {
-      moveRowTo(rowDrag.bi, rowDrag.fromRi, rowDragOver.ri);
-    }
-    setRowDrag(null);
-    setRowDragOver(null);
-  }
-
-  // ── Block drag handlers ────────────────────────────────────────
-  function handleDragPointerDown(e: React.PointerEvent, bi: number) {
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    setActiveDrag({ fromBi: bi });
-    setDragOverBi(bi);
-  }
-
-  function handleDragPointerMove(e: React.PointerEvent) {
-    if (!activeDrag) return;
-    const y = e.clientY;
-    for (let i = 0; i < blockDivRefs.current.length; i++) {
-      const el = blockDivRefs.current[i];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (y >= rect.top && y < rect.bottom) {
-        setDragOverBi(i);
-        break;
-      }
-    }
-  }
-
-  function handleDragPointerUp() {
-    if (activeDrag && dragOverBi !== null && dragOverBi !== activeDrag.fromBi) {
-      moveBlockTo(activeDrag.fromBi, dragOverBi);
-    }
-    setActiveDrag(null);
-    setDragOverBi(null);
-  }
-
   function tr(c: string) { return transposeChord(c, semitones); }
 
   return (
     <div className="pb-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <button
-          onClick={() => { setEditMode(!editMode); setSelected(new Set()); setSubActive(false); }}
-          className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${editMode ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'}`}
-        >{editMode ? '✓ 편집 완료' : '✎ 편집'}</button>
-
-        {editMode && (
-          <button onClick={resetToOriginal}
-            className="text-xs px-3 py-1 rounded-full font-semibold bg-red-50 text-red-400">
-            ↺ 원본 복귀
-          </button>
-        )}
-        {editMode && selected.size > 0 && !subActive && (
-          <button onClick={() => setSubActive(true)}
-            className="text-xs bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full font-semibold">
-            구간 이름 붙이기 ({selected.size}줄)
-          </button>
-        )}
-        {subActive && (
-          <div className="flex items-center gap-1">
-            <input autoFocus value={subInput} onChange={e => setSubInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') createSubLabel(); if (e.key === 'Escape') setSubActive(false); }}
-              placeholder="구간 이름…"
-              className="text-xs border border-gray-300 rounded px-2 py-1 w-28 outline-none focus:border-indigo-400" />
-            <button onClick={createSubLabel} className="text-xs text-indigo-600 font-semibold">확인</button>
-            <button onClick={() => setSubActive(false)} className="text-xs text-gray-400">취소</button>
-          </div>
-        )}
-      </div>
-
       {/* Blocks */}
-      {blocks.map((block, bi) => (
-        <div
-          key={block.id}
-          ref={el => { blockDivRefs.current[bi] = el; }}
-        >
-          <div className={`mb-3 ${animBlockIds.has(block.id) ? 'slide-in-section' : ''}
-            ${activeDrag?.fromBi === bi ? 'opacity-40' : ''}
-            ${dragOverBi === bi && activeDrag?.fromBi !== bi ? 'ring-2 ring-indigo-300 rounded-xl' : ''}
-          `}>
+      {blocks.map((block) => (
+        <div key={block.id}>
+          <div className="mb-3">
             {/* Section label */}
             {block.label && (
               <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
-                {editMode && (
-                  <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                    {/* Drag handle */}
-                    <div
-                      className="w-6 h-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-lg"
-                      onPointerDown={e => handleDragPointerDown(e, bi)}
-                      onPointerMove={handleDragPointerMove}
-                      onPointerUp={handleDragPointerUp}
-                      onPointerCancel={() => { setActiveDrag(null); setDragOverBi(null); }}
-                    >⠿</div>
-                    <button onClick={() => copyBlock(bi)} title="복사"
-                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-indigo-500">⊕</button>
-                    <button onClick={() => deleteBlock(bi)} title="삭제"
-                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-red-500">✕</button>
-                  </div>
-                )}
-                {editingUid === block.label.uid ? (
-                  <input autoFocus value={labelDraft} onChange={e => setLabelDraft(e.target.value)}
-                    onBlur={() => commitLabel(block.label!.uid, labelDraft)}
-                    onKeyDown={e => { if (e.key === 'Enter') commitLabel(block.label!.uid, labelDraft); if (e.key === 'Escape') setEditingUid(null); }}
-                    className="text-[11px] font-bold tracking-widest uppercase text-indigo-500 border-b border-indigo-400 outline-none bg-transparent w-36" />
-                ) : (
-                  <LabelSpan
-                    text={labels[block.label.uid] ?? block.label.section.lyrics ?? ''}
-                    onLongPress={() => {
-                      setLabelDraft(labels[block.label!.uid] ?? block.label!.section.lyrics ?? '');
-                      setEditingUid(block.label!.uid);
-                      setEditMode(true);
-                    }}
-                  />
-                )}
+                <span className="text-[11px] font-bold text-gray-400 tracking-widest uppercase select-none">
+                  {(block.label.section.lyrics ?? '').toUpperCase()}
+                </span>
               </div>
             )}
 
-            {(block.rows.length > 0 || editMode) && (
-              <div className={`rounded-xl border border-gray-200 overflow-hidden flex flex-col ${editMode ? 'divide-y divide-gray-100' : 'gap-px bg-gray-200'}`}>
-                {block.rows.map((os, ri) => {
-                  const isDraggingThis = rowDrag?.bi === bi && rowDrag.fromRi === ri;
-                  const isDragTarget   = rowDragOver?.bi === bi && rowDragOver.ri === ri && rowDrag?.fromRi !== ri;
-
-                  if (editMode) {
-                    return (
-                      <div
-                        key={os.uid}
-                        ref={el => { rowDivRefs.current.set(os.uid, el); }}
-                        className={`transition-opacity ${isDraggingThis ? 'opacity-40' : ''} ${isDragTarget ? 'ring-2 ring-inset ring-indigo-300' : ''}`}
-                      >
-                        <InlineRowEditor
-                          chords={os.section.chords}
-                          measures={os.section.measures}
-                          onChange={(ch, me) => updateRow(os.uid, ch, me)}
-                          onRemove={() => removeRowFromBlock(bi, ri)}
-                          canRemove={block.rows.length > 1}
-                          dragHandleProps={{
-                            onPointerDown: e => handleRowDragPointerDown(e, bi, ri),
-                            onPointerMove: e => handleRowDragPointerMove(e, bi),
-                            onPointerUp:   handleRowDragPointerUp,
-                            onPointerCancel: () => { setRowDrag(null); setRowDragOver(null); },
-                          }}
-                        />
-                      </div>
-                    );
-                  }
-
-                  // ── View mode ────────────────────────────────────
+            {block.rows.length > 0 && (
+              <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
+                {block.rows.map((os) => {
                   const chords   = os.section.chords.map(tr);
                   const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
                   const count    = measures.length;
@@ -431,12 +131,10 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
                               isCurrent={isCur}
                               cursorActive={cursorActive}
                               isRest={os.section.restFrom !== undefined && mi >= os.section.restFrom}
-                              isRowSelected={false}
                               chords={barChords}
                               lyric={lyric}
                               note={note}
                               showNotes={showNotes}
-                              editMode={false}
                               onChordClick={setActiveChord}
                               onLongPress={() => { setActiveNote({ origIdx: os.originalIdx, mi }); setNoteDraft(notes[nk] ?? ''); }}
                               onTap={() => onCellTap(os.originalIdx, mi)}
@@ -447,19 +145,9 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
                     </div>
                   );
                 })}
-                {editMode && (
-                  <button
-                    onClick={() => insertRow(bi)}
-                    className="w-full text-xs text-gray-400 hover:text-indigo-500 py-1.5 bg-white hover:bg-indigo-50 transition-colors text-center"
-                  >+ 줄 추가</button>
-                )}
               </div>
             )}
           </div>
-
-          {editMode && (
-            <InsertSectionButton onClick={() => insertSection(bi)} />
-          )}
         </div>
       ))}
 
@@ -490,7 +178,6 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
         </div>
       )}
 
-
       {activeChord && (
         <ChordDiagram
           chordName={activeChord}
@@ -502,131 +189,20 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
   );
 }
 
-// ── InlineRowEditor ────────────────────────────────────────────────────────────
-function InlineRowEditor({ chords, measures, onChange, onRemove, canRemove, dragHandleProps }: {
-  chords: string[];
-  measures: string[];
-  onChange: (chords: string[], measures: string[]) => void;
-  onRemove: () => void;
-  canRemove: boolean;
-  dragHandleProps: {
-    onPointerDown: (e: React.PointerEvent) => void;
-    onPointerMove: (e: React.PointerEvent) => void;
-    onPointerUp: () => void;
-    onPointerCancel: () => void;
-  };
-}) {
-  const CELLS = 4;
-  const ch = [...chords,   '', '', '', ''].slice(0, CELLS);
-  const me = [...measures, '', '', '', ''].slice(0, CELLS);
-
-  function setChord(i: number, v: string) {
-    const next = [...ch]; next[i] = v;
-    onChange(next, me);
-  }
-  function setMeasure(i: number, v: string) {
-    const next = [...me]; next[i] = v;
-    onChange(ch, next);
-  }
-  function handleChord0Blur(e: React.FocusEvent<HTMLInputElement>) {
-    const parsed = parseSmartChord(e.target.value);
-    if (parsed) onChange(parsed, me);
-  }
-
-  return (
-    <div className="flex items-start gap-1 px-2 py-2 group bg-white">
-      <div
-        className="mt-1.5 cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-base w-5 text-center shrink-0"
-        {...dragHandleProps}
-      >⠿</div>
-      <div className="flex-1 grid gap-px"
-        style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'auto auto' }}
-      >
-        {ch.map((c, mi) => (
-          <input
-            key={`c_${mi}`}
-            value={c}
-            onChange={e => setChord(mi, e.target.value.toUpperCase())}
-            onBlur={mi === 0 ? handleChord0Blur : undefined}
-            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
-            placeholder={['G', 'D', 'Em', 'Am'][mi]}
-            tabIndex={-1}
-            style={{ gridColumn: mi + 1, gridRow: 1 }}
-            className="bg-indigo-50 text-indigo-700 font-bold text-sm rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full text-left"
-          />
-        ))}
-        {me.map((m, mi) => (
-          <input
-            key={`l_${mi}`}
-            value={m}
-            onChange={e => setMeasure(mi, e.target.value)}
-            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
-            placeholder="가사"
-            tabIndex={-1}
-            style={{ gridColumn: mi + 1, gridRow: 2 }}
-            className="bg-white text-gray-800 text-sm border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full text-left"
-          />
-        ))}
-      </div>
-      {canRemove && (
-        <button
-          onClick={onRemove}
-          className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center text-[10px] text-gray-300 hover:text-red-400 shrink-0"
-        >✕</button>
-      )}
-    </div>
-  );
-}
-
-// ── InsertSectionButton ────────────────────────────────────────────────────────
-function InsertSectionButton({ onClick }: { onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
-      className="w-full flex items-center gap-2 py-1 mb-2 group"
-    >
-      <div className={`flex-1 h-px transition-colors ${hover ? 'bg-indigo-300' : 'bg-gray-150'}`} />
-      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all ${
-        hover
-          ? 'bg-indigo-600 text-white border-indigo-600 scale-105'
-          : 'bg-white text-gray-300 border-gray-200'
-      }`}>
-        + 구간 추가
-      </span>
-      <div className={`flex-1 h-px transition-colors ${hover ? 'bg-indigo-300' : 'bg-gray-150'}`} />
-    </button>
-  );
-}
-
-// ── LabelSpan ──────────────────────────────────────────────────────────────────
-function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => void }) {
-  const lp = useLongPress(onLongPress);
-  return (
-    <span {...lp} className="text-[11px] font-bold text-gray-400 tracking-widest uppercase touch-none select-none cursor-pointer">
-      {text.toUpperCase()}
-    </span>
-  );
-}
-
 // ── MeasureCell ────────────────────────────────────────────────────────────────
 function MeasureCell({
-  cellKey, cellRefs, isCurrent, cursorActive, isRest, isRowSelected, chords, lyric, note, showNotes,
-  editMode, onChordClick, onLongPress, onTap,
+  cellKey, cellRefs, isCurrent, cursorActive, isRest, chords, lyric, note, showNotes,
+  onChordClick, onLongPress, onTap,
 }: {
   cellKey: string;
   cellRefs: React.MutableRefObject<Map<string, HTMLElement>>;
   isCurrent: boolean;
   cursorActive: boolean;
   isRest: boolean;
-  isRowSelected: boolean;
   chords: string[];
   lyric: string;
   note?: string;
   showNotes: boolean;
-  editMode: boolean;
   onChordClick: (c: string) => void;
   onLongPress: () => void;
   onTap: () => void;
@@ -661,8 +237,6 @@ function MeasureCell({
       ref={setRef as any}
       className={`px-2 pb-2 transition-colors relative
         ${cursorClass}
-        ${isRowSelected ? '!bg-amber-50 ring-1 ring-inset ring-amber-300' : ''}
-        ${editMode && !isRest ? 'cursor-pointer hover:bg-gray-50' : ''}
         ${isRest ? 'pointer-events-none' : ''}
       `}
       onPointerDown={handlePointerDown}
@@ -699,7 +273,6 @@ function MeasureCell({
             const rawChord = chords.length > 0 ? chords[0] : '';
             const subParts = rawChord.includes('.') ? rawChord.split('.') : null;
             if (subParts) {
-              // 4구간 고정 그리드: 각 . 위치가 빈 칸, 알파벳이 해당 위치 채움
               const grid = [...subParts, '', '', '', ''].slice(0, 4);
               return (
                 <div className="grid grid-cols-2 gap-x-0.5 gap-y-0 mb-0.5" style={{ minHeight: '1.5rem' }}>
@@ -707,7 +280,7 @@ function MeasureCell({
                     <button key={i}
                       onClick={e => { if (p) { e.stopPropagation(); onChordClick(p); } }}
                       className={`text-[10px] leading-tight text-left truncate ${p ? 'text-indigo-600 font-bold hover:underline active:opacity-60' : 'pointer-events-none'}`}>
-                      {p || ' '}
+                      {p || ' '}
                     </button>
                   ))}
                 </div>
