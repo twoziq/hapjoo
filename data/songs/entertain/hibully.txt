@@ -1,0 +1,38 @@
+{title: Hi Bully}
+{artist: 터치드 (Touched)}
+{key: Em}
+{capo: 0}
+{bpm: 100}
+
+[Intro]
+[Em.] / [D/E.] / [C/E.] / [B/E.] /
+[Em.] / [D/E.] / [C/E.] / [B/E.] /
+
+[Verse 1]
+[Em.]안녕 날 괴롭히던 / [D.]너 / [C.]좋아 보여 / [D.]웃는 네 모습 /
+[Em.]여전히 나를 깔보 / [D.]며 / [C.]짝다리 짚고 있는 / [D.]너 /
+[Em.]얼마나 오랜 시간 / [D.]이 지나야 / [C.]나의 아픔이 사라져 / [D.]무너져 /
+[C.]아직도 나를 / [D.]짓누르고 있는 / [C.]너 / [D.] /
+
+[Chorus 1]
+[Em.]Hi bully my name is jerck / [G.]너를 피해 눈을 피해 / [C.]도망을 가 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]얼굴만 때리지 말아 / [C.]줘 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]너를 피해 눈을 피해 / [C.]도망을 가 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]얼굴만 때리지 말아 / [C.]줘 / [B.] /
+
+[Verse 2]
+[Em.]어두운 골목길 안가 / [D.]돌아서 큰길로만 가 / [C.]저 멀리 너 걸어올까 봐 / [D.]마음 졸이며 고개 숙인다 /
+[Em.]Nightmare 반복되는 꿈 / [D.]기도해 평범한 꿈을 / [C.]눈 감아도 꿈에서 계속해서 / [D.]날 짓누르고 있는 너 /
+
+[Bridge]
+[Em.D/F#.] / [G.A.] / [Em.D/F#.] / [G.A.] /
+[Em.D/F#.]가벼운 너의 바람이 / [G.A.]나에겐 시린 아픔이야 / [Em.D/F#.]가벼운 너의 바람이 / [G.A.]나에겐 너무도 /
+[Em.D/F#.]가벼운 너의 바람이 / [G.A.]나에겐 시린 아픔이야 / [Em.D/F#.]가벼운 너의 바람이 / [G.A.]나에겐 너무도 /
+
+[Outro]
+[Em.]Hi bully my name is jerck / [G.]너를 피해 눈을 피해 / [C.]도망가던 나 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]이제 고갤 들어 널 / [C.]바라본다 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]너를 피해 눈을 피해 / [C.]도망가던 나 / [B.] /
+[Em.]Hi bully my name is jerck / [G.]이제 고갤 들어 널 / [C.]바라본다 / [B.] /
+[Em.]Hi bully / [G.]Hi bully / [C.] / [B.] /
+[Em.]Hi bully my name is jerck / [G.]이제 고갤 들어 널 / [C.]바라본다 / [Em.] //

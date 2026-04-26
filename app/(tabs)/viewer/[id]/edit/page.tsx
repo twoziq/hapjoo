@@ -1,6 +1,6 @@
 import { parseSheet } from '@/lib/chordParser';
 import { supabase } from '@/lib/supabase';
-import { getSongMarkdown } from '@/data/songs/index';
+import { getSongContent } from '@/lib/songLoader';
 import SongEditorClient from '@/components/SongEditor';
 
 function sheetToEditorData(parsed: ReturnType<typeof parseSheet>) {
@@ -58,7 +58,7 @@ function sheetToEditorData(parsed: ReturnType<typeof parseSheet>) {
 
 export default async function EditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let markdown = getSongMarkdown(id);
+  let markdown = getSongContent(id) ?? '';
 
   if (supabase) {
     const { data } = await supabase.from('songs').select('content').eq('id', id).single();

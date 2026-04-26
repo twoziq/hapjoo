@@ -1,4 +1,4 @@
-export default `{title: 너에게 난 나에게 넌}
+{title: 너에게 난 나에게 넌}
 {artist: 자전거 탄 풍경}
 {key: G}
 {capo: 0}
@@ -17,7 +17,7 @@ export default `{title: 너에게 난 나에게 넌}
 [G.D.]소중했던 우리 / [Em.G.]푸르던 날을 기억하며 / [C.G.]우 후회 없이 / [Am.D.]그림처럼 남아주기를 /
 
 [Interlude]
-[C.D.] // 
+[C.D.] //
 [G.D.] / [Em.Bm.] / [C.G.] / [Am.D.] /
 
 [Verse 2]
@@ -34,4 +34,3 @@ export default `{title: 너에게 난 나에게 넌}
 
 [Outro]
 [Am.C.]그림처럼 남아주기를 / [D.G.] /
-`;

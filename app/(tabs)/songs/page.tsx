@@ -1,20 +1,41 @@
-'use client';
-
-import Link from 'next/link';
-import { useState } from 'react';
-import { getSongsByFolder, type SongEntry } from '@/data/songs/index';
+import { scanSongs } from '@/lib/songLoader';
+import { dbGetSongs } from '@/lib/supabase';
+import SongsClient, { type SongItem } from './SongsClient';
 import AuthButton from '@/components/AuthButton';
+import Link from 'next/link';
 
-export default function SongsPage() {
-  const [query, setQuery] = useState('');
-  const groups = getSongsByFolder();
+export default async function SongsPage() {
+  const fileSongs = scanSongs();
+  const dbSongs = await dbGetSongs();
 
-  const filtered = (songs: SongEntry[]) =>
-    query.trim()
-      ? songs.filter(s =>
-          s.title.includes(query) || s.artist.includes(query)
-        )
-      : songs;
+  const merged: SongItem[] = fileSongs.map(s => ({
+    id: s.id, title: s.title, artist: s.artist, key: s.key, folder: s.folder,
+  }));
+
+  if (dbSongs) {
+    const fileIds = new Set(fileSongs.map(s => s.id));
+    for (const db of dbSongs) {
+      if (fileIds.has(db.id)) {
+        const idx = merged.findIndex(s => s.id === db.id);
+        if (idx >= 0) {
+          merged[idx] = { id: db.id, title: db.title, artist: db.artist, key: db.key, folder: db.folder ?? null };
+        }
+      } else {
+        merged.push({ id: db.id, title: db.title, artist: db.artist, key: db.key, folder: db.folder ?? null });
+      }
+    }
+  }
+
+  const map = new Map<string | null, SongItem[]>();
+  for (const s of merged) {
+    const f = s.folder ?? null;
+    if (!map.has(f)) map.set(f, []);
+    map.get(f)!.push(s);
+  }
+
+  const groups: { folder: string | null; songs: SongItem[] }[] = [];
+  if (map.has(null)) groups.push({ folder: null, songs: map.get(null)! });
+  map.forEach((songs, folder) => { if (folder !== null) groups.push({ folder, songs }); });
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -28,49 +49,7 @@ export default function SongsPage() {
           </Link>
         </div>
       </div>
-
-      <input
-        type="search"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder="곡 제목 또는 아티스트 검색"
-        className="w-full mb-4 px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 bg-gray-50"
-      />
-
-      {groups.map(({ folder, songs }) => {
-        const list = filtered(songs);
-        if (!list.length) return null;
-        return (
-          <div key={folder ?? '__default__'} className="mb-6">
-            {folder && (
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold text-gray-400 tracking-widest uppercase">
-                  📁 {folder}
-                </span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
-            )}
-            <ul className="flex flex-col gap-2">
-              {list.map(song => (
-                <li key={song.id}>
-                  <Link
-                    href={`/viewer/${song.id}`}
-                    className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
-                  >
-                    <div>
-                      <p className="font-semibold">{song.title}</p>
-                      <p className="text-sm text-gray-400">{song.artist}</p>
-                    </div>
-                    <span className="text-sm font-bold text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
-                      {song.key}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+      <SongsClient groups={groups} />
     </div>
   );
 }
