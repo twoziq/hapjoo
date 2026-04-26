@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { parseSheet } from '@/lib/chordParser';
-import { transposeNote } from '@/lib/transpose';
+import { transposeNote, FEMALE_KEY_OFFSET } from '@/lib/transpose';
 import SheetViewer from '@/components/SheetViewer';
 
 interface Props { markdown: string; songId: string; }
@@ -195,8 +195,8 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
   // ── 남/여 key logic ────────────────────────────────────────────
   const songGender  = (meta.gender as string) || '남';
-  const maleSemi    = songGender === '여' ? -5 : 0;
-  const femaleSemi  = songGender === '여' ? 0 : 5;
+  const maleSemi    = songGender === '여' ? -FEMALE_KEY_OFFSET : 0;
+  const femaleSemi  = songGender === '여' ? 0 : FEMALE_KEY_OFFSET;
 
   return (
     <div className="flex flex-col h-full">

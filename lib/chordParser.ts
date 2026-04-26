@@ -23,10 +23,15 @@ export interface ParsedSheet {
 // Accepts: g→G, em→Em, FM7→Fmaj7, A(add9)→Aadd9, Gm7(b5)→Gm7b5, Eb6→Eb6
 const CHORD_ROOT = /^([a-gA-G])([b#]?)((?:maj7?|M7?|m7?|7|9|11|13|6|sus[24]?|dim7?|aug|add[0-9]+|\(add[0-9]+\)|\([b#][0-9]+\))*)(\/.+)?$/;
 
+// Uppercase root, lowercase quality — lets CHORD_ROOT match AADD9, BSUS4, etc.
+function canonicalize(s: string): string {
+  return s ? s[0] + s.slice(1).toLowerCase() : s ?? '';
+}
+
 export function normalizeChord(raw: string): string {
   if (!raw?.trim()) return raw ?? '';
   const t = raw.trim();
-  const m = t.match(CHORD_ROOT);
+  const m = canonicalize(t).match(CHORD_ROOT);
   if (!m) return t;
   const [, root, acc, quality, bass] = m;
   const q = quality
@@ -61,10 +66,10 @@ function parseSegment(seg: string): { chord: string; lyric: string } {
       const lyric = bm[2].trim();
       if (raw.includes('.')) {
         const parts = raw.split('.');
-        if (parts.some(p => p) && parts.every(p => !p || CHORD_ROOT.test(p))) {
+        if (parts.some(p => p) && parts.every(p => !p || CHORD_ROOT.test(canonicalize(p)))) {
           return { chord: parts.map(p => p ? normalizeChord(p) : '').join('.'), lyric };
         }
-      } else if (CHORD_ROOT.test(raw)) {
+      } else if (CHORD_ROOT.test(canonicalize(raw))) {
         return { chord: normalizeChord(raw), lyric };
       }
     }
@@ -77,13 +82,19 @@ function parseSegment(seg: string): { chord: string; lyric: string } {
   const rest = spaceIdx === -1 ? '' : t.slice(spaceIdx + 1).trim();
   if (firstWord.includes('.')) {
     const parts = firstWord.split('.');
-    if (parts.some(p => p !== '') && parts.every(p => p === '' || CHORD_ROOT.test(p))) {
+    if (parts.some(p => p !== '') && parts.every(p => p === '' || CHORD_ROOT.test(canonicalize(p)))) {
       return { chord: parts.map(p => p ? normalizeChord(p) : '').join('.'), lyric: rest };
     }
   }
 
   const m = t.match(SEG_CHORD);
   if (m) return { chord: normalizeChord(m[1]), lyric: (m[3] ?? '').trim() };
+  // Fallback: try canonicalizing chord token for uppercase quality (e.g. AADD9)
+  const spIdx = t.search(/\s/);
+  const chordToken = spIdx > 0 ? t.slice(0, spIdx) : t;
+  if (CHORD_ROOT.test(canonicalize(chordToken))) {
+    return { chord: normalizeChord(chordToken), lyric: spIdx > 0 ? t.slice(spIdx).trim() : '' };
+  }
   return { chord: '', lyric: t };
 }
 
@@ -212,7 +223,7 @@ function parseBody(body: string): SheetSection[] {
     const singleBracket = line.match(/^\[([^\[\]]+)\]$/);
     if (singleBracket) {
       const content = singleBracket[1].trim();
-      const looksLikeChord = CHORD_ROOT.test(content);
+      const looksLikeChord = CHORD_ROOT.test(canonicalize(content));
       if (!looksLikeChord) {
         pendingChords = [];
         startSection(content);

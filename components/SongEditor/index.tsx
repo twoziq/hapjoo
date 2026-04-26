@@ -244,28 +244,12 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
     const content = rawContent;
 
     if (isEdit && editSongId) {
-      if (!supabaseConfigured) {
-        try {
-          const res = await fetch(`/api/songs/${encodeURIComponent(editSongId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content }),
-          });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error ?? '저장 실패');
-          setResult({ ok: true, msg: '수정 완료!' });
-          setTimeout(() => router.push(`/viewer/${editSongId}`), 800);
-        } catch (e: any) {
-          setResult({ ok: false, msg: `저장 실패: ${e.message}` });
-        }
+      const err = await dbUpdateSong(editSongId, { title: saveTitle, artist: saveArtist, key: saveKey, capo: saveCapo, bpm: saveBpm, content });
+      if (err) {
+        setResult({ ok: false, msg: `저장 실패: ${err}` });
       } else {
-        const err = await dbUpdateSong(editSongId, { title: saveTitle, artist: saveArtist, key: saveKey, capo: saveCapo, bpm: saveBpm, content });
-        if (err) {
-          setResult({ ok: false, msg: `저장 실패: ${err}` });
-        } else {
-          setResult({ ok: true, msg: '수정 완료!' });
-          setTimeout(() => router.push(`/viewer/${editSongId}`), 800);
-        }
+        setResult({ ok: true, msg: '수정 완료!' });
+        setTimeout(() => router.push(`/viewer/${editSongId}`), 800);
       }
     } else if (supabaseConfigured) {
       const id = slugify(saveTitle);
