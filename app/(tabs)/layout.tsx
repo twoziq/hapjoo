@@ -3,9 +3,10 @@
 import { usePathname, useRouter } from 'next/navigation';
 
 const TABS = [
-  { href: '/songs',  label: '악보',   icon: '♪' },
-  { href: '/chords', label: '코드표', icon: '✋' },
-  { href: '/tuner',  label: '튜너',   icon: '🎸' },
+  { href: '/songs',    label: '악보',   icon: '♪' },
+  { href: '/chords',   label: '코드표', icon: '✋' },
+  { href: '/tuner',    label: '튜너',   icon: '🎸' },
+  { href: '/settings', label: '설정',   icon: '⚙️' },
 ];
 
 export default function TabsLayout({ children }) {
