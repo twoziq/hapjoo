@@ -1,7 +1,6 @@
 import { scanSongs } from '@/lib/songLoader';
 import { dbGetSongs } from '@/lib/supabase';
 import SongsClient, { type SongItem } from './SongsClient';
-import AuthButton from '@/components/AuthButton';
 import Link from 'next/link';
 
 export default async function SongsPage() {
@@ -42,7 +41,6 @@ export default async function SongsPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">악보 목록</h1>
         <div className="flex items-center gap-2">
-          <AuthButton />
           <Link href="/songs/new"
             className="text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white">
             + 악보 추가

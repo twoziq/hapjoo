@@ -30,10 +30,6 @@ create policy "Public delete songs"
 -- Sample songs
 insert into songs (id, title, artist, key, capo, bpm, content) values
 (
-  'noeul', '노을', '김광석', 'G', 0, 80,
-  E'---\ntitle: 노을\nartist: 김광석\nkey: G\ncapo: 0\nbpm: 80\n---\n\n[G][D][Em][G7]\n너에게난 해질 | 녘노을 처럼\n\n[C][G][Am7][D]\n한편의 아름다운 | 추억이 되고\n\n[G][D][Em][G7]\n기나긴 이 하루도 | 저물어가면\n\n[C][D][G]\n행복했던 그 | 기억에 | 잠겨\n\n[G][D][Em][G7]\n붉게 물든 노을 | 바라보면서\n\n[C][G][Am7][D]\n왠지 모를 서러 | 움에 눈물 지네\n\n[G][D][Em][G7]\n이 세상에 나 | 홀로 남겨진 것 | 같아\n\n[C][D][G]\n안개처럼 피어 | 오른 | 외로움\n'
-),
-(
   'neoege', '너에게난 나에게넌', '자전거탄 풍경', 'G', 0, 74,
   E'{title: 너에게 난 나에게 넌}\n{artist: 자전거 탄 풍경}\n{key: G}\n{capo: 0}\n{bpm: 74}\n\n[Chorus]\n[G.D.]너에게 난 | [Em.Bm.]해질 | [C.G.]녘 노을처럼 한편의 아 | [Am.D.]름다운 추억이 되고 |\n[G.D.]소중했던 우리 | [Em.G.]푸르던 날을 기억하며 | [C.G.]우 후회 없이 | [Am.D.]그림처럼 남아주기를 |\n\n[Verse 1]\n[G.D.]나에게 넌 | [Em.Bm.]내 외롭던 지난 시간을 | [C.G.]환하게 비춰주던 | [Am.D.]햇살이 되고 |\n[G.D.]조그맣던 | [Em.G.]너의 하얀 손 위에 | [C.G.]빛나는 보석처럼 | [Am.D.]영원의 약속이 되어 |\n\n[Chorus]\n[G.D.]너에게 난 | [Em.Bm.]해질 | [C.G.]녘 노을처럼 한편의 아 | [Am.D.]름다운 추억이 되고 |\n[G.D.]소중했던 우리 | [Em.G.]푸르던 날을 기억하며 | [C.G.]우 후회 없이 | [Am.D.]그림처럼 남아주기를 |\n\n[Interlude]\n[C.D.] ||\n[G.D.] | [Em.Bm.] | [C.G.] | [Am.D.] |\n\n[Verse 2]\n[G.D.]나에게 넌 | [Em.Bm.]초록의 슬픈 노래로 | [C.G.]내 작은 가슴 속에 | [Am.D.]이렇게 남아 |\n[G.D.]반짝이던 | [Em.G.]너의 예쁜 눈망울에 | [C.G.]수많은 별이 되어 | [Am.D.]영원토록 빛나고 싶어 |\n\n[Chorus]\n[G.D.]너에게 난 | [Em.Bm.]해질 | [C.G.]녘 노을처럼 한편의 아 | [Am.D.]름다운 추억이 되고 |\n[G.D.]소중했던 우리 | [Em.G.]푸르던 날을 기억하며 | [C.G.]우 후회 없이 | [Am.D.]그림처럼 남아주기를 |\n\n[Outro]\n[Am.C.]그림처럼 남아주기를 | [D.G.] |\n'
 )
