@@ -79,6 +79,11 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
   const [dragOverBi, setDragOverBi]   = useState<number | null>(null);
   const blockDivRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  // Row drag state
+  const [rowDrag, setRowDrag]         = useState<{ bi: number; fromRi: number } | null>(null);
+  const [rowDragOver, setRowDragOver] = useState<{ bi: number; ri: number } | null>(null);
+  const rowDivRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`hapjoo_notes_${songId}`) ?? '{}'); }
     catch { return {}; }
@@ -110,6 +115,25 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
     const nb = [...blocks];
     const [removed] = nb.splice(from, 1);
     nb.splice(to, 0, removed);
+    setOSections(flatten(nb));
+  }
+
+  function insertRow(bi: number) {
+    const uid = `row_${Date.now()}`;
+    const newOS: OSection = {
+      uid,
+      originalIdx: -1,
+      section: { chords: ['', '', '', ''], lyrics: '', measures: ['', '', '', ''] },
+    };
+    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
+    nb[bi].rows.push(newOS);
+    setOSections(flatten(nb));
+  }
+
+  function moveRowTo(bi: number, fromRi: number, toRi: number) {
+    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
+    const [removed] = nb[bi].rows.splice(fromRi, 1);
+    nb[bi].rows.splice(toRi, 0, removed);
     setOSections(flatten(nb));
   }
 
@@ -181,6 +205,34 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
         ? { ...s, section: { ...s.section, chords, measures, lyrics: measures.join(' | ') } }
         : s
     ));
+  }
+
+  // ── Row drag handlers ──────────────────────────────────────────
+  function handleRowDragPointerDown(e: React.PointerEvent, bi: number, ri: number) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setRowDrag({ bi, fromRi: ri });
+    setRowDragOver({ bi, ri });
+  }
+
+  function handleRowDragPointerMove(e: React.PointerEvent, bi: number) {
+    if (!rowDrag || rowDrag.bi !== bi) return;
+    const y = e.clientY;
+    const rows = blocks[bi].rows;
+    for (let ri = 0; ri < rows.length; ri++) {
+      const el = rowDivRefs.current.get(rows[ri].uid);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (y >= rect.top && y < rect.bottom) { setRowDragOver({ bi, ri }); break; }
+    }
+  }
+
+  function handleRowDragPointerUp() {
+    if (rowDrag && rowDragOver && rowDragOver.bi === rowDrag.bi && rowDragOver.ri !== rowDrag.fromRi) {
+      moveRowTo(rowDrag.bi, rowDrag.fromRi, rowDragOver.ri);
+    }
+    setRowDrag(null);
+    setRowDragOver(null);
   }
 
   // ── Block drag handlers ────────────────────────────────────────
@@ -295,62 +347,86 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
               </div>
             )}
 
-            {block.rows.length > 0 && (
+            {(block.rows.length > 0 || editMode) && (
               <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
-                {block.rows.map(os => {
+                {block.rows.map((os, ri) => {
                   const chords   = os.section.chords.map(tr);
                   const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
                   const count    = measures.length;
                   const oneToOne = chords.length === count;
                   const isRowSel = editMode && selected.has(os.uid);
                   const cols = count <= 4 ? count : 4;
+                  const isDraggingThis = rowDrag?.bi === bi && rowDrag.fromRi === ri;
+                  const isDragTarget  = rowDragOver?.bi === bi && rowDragOver.ri === ri && rowDrag?.fromRi !== ri;
 
                   return (
-                    <div key={os.uid}
-                      className="grid gap-px bg-gray-200"
-                      style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-                      {measures.map((lyric, mi) => {
-                        const barChords = oneToOne
-                          ? (chords[mi] ? [chords[mi]] : [])
-                          : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
+                    <div
+                      key={os.uid}
+                      ref={el => { rowDivRefs.current.set(os.uid, el); }}
+                      className={`flex items-stretch gap-px bg-gray-200 transition-opacity
+                        ${isDraggingThis ? 'opacity-40' : ''}
+                        ${isDragTarget ? 'ring-2 ring-inset ring-indigo-300' : ''}
+                      `}
+                    >
+                      {editMode && (
+                        <div
+                          className="w-5 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-base bg-white shrink-0"
+                          onPointerDown={e => handleRowDragPointerDown(e, bi, ri)}
+                          onPointerMove={e => handleRowDragPointerMove(e, bi)}
+                          onPointerUp={handleRowDragPointerUp}
+                          onPointerCancel={() => { setRowDrag(null); setRowDragOver(null); }}
+                        >⠿</div>
+                      )}
+                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+                        {measures.map((lyric, mi) => {
+                          const barChords = oneToOne
+                            ? (chords[mi] ? [chords[mi]] : [])
+                            : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
 
-                        const key  = `${os.uid}_${mi}`;
-                        const nk   = noteKey(os.originalIdx, mi);
-                        const note = os.originalIdx >= 0 ? notes[nk] : undefined;
-                        const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
+                          const key  = `${os.uid}_${mi}`;
+                          const nk   = noteKey(os.originalIdx, mi);
+                          const note = os.originalIdx >= 0 ? notes[nk] : undefined;
+                          const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
 
-                        return (
-                          <MeasureCell
-                            key={key}
-                            cellKey={key}
-                            cellRefs={cellRefs}
-                            isCurrent={isCur}
-                            cursorActive={cursorActive}
-                            isRest={os.section.restFrom !== undefined && mi >= os.section.restFrom}
-                            isRowSelected={isRowSel}
-                            chords={barChords}
-                            lyric={lyric}
-                            note={note}
-                            showNotes={showNotes}
-                            editMode={editMode}
-                            onChordClick={setActiveChord}
-                            onLongPress={() => editMode
-                              ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
-                              : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
-                            }
-                            onTap={() => {
-                              if (editMode) {
-                                setEditingRow(os);
-                              } else {
-                                onCellTap(os.originalIdx, mi);
+                          return (
+                            <MeasureCell
+                              key={key}
+                              cellKey={key}
+                              cellRefs={cellRefs}
+                              isCurrent={isCur}
+                              cursorActive={cursorActive}
+                              isRest={os.section.restFrom !== undefined && mi >= os.section.restFrom}
+                              isRowSelected={isRowSel}
+                              chords={barChords}
+                              lyric={lyric}
+                              note={note}
+                              showNotes={showNotes}
+                              editMode={editMode}
+                              onChordClick={setActiveChord}
+                              onLongPress={() => editMode
+                                ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
+                                : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
                               }
-                            }}
-                          />
-                        );
-                      })}
+                              onTap={() => {
+                                if (editMode) {
+                                  setEditingRow(os);
+                                } else {
+                                  onCellTap(os.originalIdx, mi);
+                                }
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
+                {editMode && (
+                  <button
+                    onClick={() => insertRow(bi)}
+                    className="w-full text-xs text-gray-400 hover:text-indigo-500 py-1.5 bg-white hover:bg-indigo-50 transition-colors text-center"
+                  >+ 줄 추가</button>
+                )}
               </div>
             )}
           </div>
@@ -589,14 +665,33 @@ function MeasureCell({
         </div>
       ) : (
         <>
-          <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
-            {chords.map((chord, i) => (
-              <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
-                className="text-indigo-600 font-bold text-[13px] leading-none hover:underline active:opacity-60">
-                {chord}
-              </button>
-            ))}
-          </div>
+          {(() => {
+            const rawChord = chords.length > 0 ? chords[0] : '';
+            const subParts = rawChord.includes('.') ? rawChord.split('.') : null;
+            if (subParts) {
+              const nonEmpty = subParts.filter(Boolean);
+              return (
+                <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
+                  {nonEmpty.map((p, i) => (
+                    <button key={i} onClick={e => { e.stopPropagation(); onChordClick(p); }}
+                      className="text-indigo-600 font-bold text-[11px] leading-none hover:underline active:opacity-60">
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
+                {chords.map((chord, i) => (
+                  <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
+                    className="text-indigo-600 font-bold text-[13px] leading-none hover:underline active:opacity-60">
+                    {chord}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
           <p className="text-[13px] text-gray-800 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
             {lyric || ' '}
           </p>

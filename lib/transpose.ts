@@ -27,11 +27,18 @@ export function transposeNote(note: string, semitones: number): string {
   return semitones >= 0 ? CHROMATIC_SHARP[newIdx] : CHROMATIC_FLAT[newIdx];
 }
 
-export function transposeChord(chordName: string, semitones: number): string {
-  if (semitones === 0) return chordName;
+function transposeSingle(chordName: string, semitones: number): string {
   const { root, type } = parseChordName(chordName);
   const newRoot = transposeNote(root, semitones);
   return newRoot + type;
+}
+
+export function transposeChord(chordName: string, semitones: number): string {
+  if (semitones === 0) return chordName;
+  if (chordName.includes('.')) {
+    return chordName.split('.').map(p => p ? transposeSingle(p, semitones) : '').join('.');
+  }
+  return transposeSingle(chordName, semitones);
 }
 
 export function getFemaleKeyOffset(originalKey: string): number {

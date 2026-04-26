@@ -46,6 +46,36 @@ const SEG_CHORD = /^([a-gA-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[
 function parseSegment(seg: string): { chord: string; lyric: string } {
   const t = seg.trim();
   if (!t) return { chord: '', lyric: '' };
+
+  // ChordPro bracket format: [G.D.]lyric or [Am]lyric
+  if (t.startsWith('[')) {
+    const bm = t.match(/^\[([^\]]*)\](.*)/);
+    if (bm) {
+      const raw = bm[1].trim().replace(/\.+$/, ''); // strip trailing dots ([C.] [C..] → C)
+      const lyric = bm[2].trim();
+      if (raw.includes('.')) {
+        const parts = raw.split('.');
+        if (parts.some(p => p) && parts.every(p => !p || CHORD_ROOT.test(p))) {
+          return { chord: parts.map(p => p ? normalizeChord(p) : '').join('.'), lyric };
+        }
+      } else if (CHORD_ROOT.test(raw)) {
+        return { chord: normalizeChord(raw), lyric };
+      }
+    }
+    return { chord: '', lyric: t };
+  }
+
+  // Slash format multi-chord: G.D lyric
+  const spaceIdx = t.indexOf(' ');
+  const firstWord = spaceIdx === -1 ? t : t.slice(0, spaceIdx);
+  const rest = spaceIdx === -1 ? '' : t.slice(spaceIdx + 1).trim();
+  if (firstWord.includes('.')) {
+    const parts = firstWord.split('.');
+    if (parts.some(p => p !== '') && parts.every(p => p === '' || CHORD_ROOT.test(p))) {
+      return { chord: parts.map(p => p ? normalizeChord(p) : '').join('.'), lyric: rest };
+    }
+  }
+
   const m = t.match(SEG_CHORD);
   if (m) return { chord: normalizeChord(m[1]), lyric: (m[3] ?? '').trim() };
   return { chord: '', lyric: t };
@@ -75,9 +105,26 @@ function parseMeasureLine(line: string): SheetSection {
 
 // ── Frontmatter parser ────────────────────────────────────────────────────────
 function parseFrontmatter(text: string): { meta: SheetMeta; body: string } {
+  // ChordPro-style {key: value} metadata
+  if (text.trimStart().startsWith('{')) {
+    const lines = text.split('\n');
+    const metaRe = /^\{(\w+):\s*(.+)\}$/;
+    const meta: SheetMeta = {};
+    let i = 0;
+    while (i < lines.length && metaRe.test(lines[i].trim())) {
+      const m = lines[i].trim().match(metaRe)!;
+      meta[m[1]] = m[2].trim();
+      i++;
+    }
+    while (i < lines.length && !lines[i].trim()) i++; // skip blank separator
+    if (meta.capo) meta.capo = parseInt(meta.capo as unknown as string, 10) || 0;
+    if (meta.bpm)  meta.bpm  = parseInt(meta.bpm  as unknown as string, 10) || 0;
+    return { meta, body: lines.slice(i).join('\n').trim() };
+  }
+
+  // --- frontmatter fallback
   const match = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) return { meta: {}, body: text };
-
   const meta: SheetMeta = {};
   match[1].split('\n').forEach((line) => {
     const [key, ...rest] = line.split(':');
@@ -85,7 +132,6 @@ function parseFrontmatter(text: string): { meta: SheetMeta; body: string } {
   });
   if (meta.capo) meta.capo = parseInt(meta.capo as unknown as string, 10) || 0;
   if (meta.bpm)  meta.bpm  = parseInt(meta.bpm  as unknown as string, 10) || 0;
-
   return { meta, body: match[2].trim() };
 }
 
@@ -125,6 +171,18 @@ function parseBody(body: string): SheetSection[] {
     const line = rawLine.trim();
     if (!line) { pendingChords = []; continue; }
 
+    // ── ChordPro directive: {comment: text} → section label, others → skip ───
+    if (line.startsWith('{')) {
+      const dm = line.match(/^\{(?:comment|c):\s*(.+)\}$/i);
+      if (dm) {
+        pendingChords = [];
+        const label = dm[1].trim();
+        startSection(label);
+        result.push({ chords: [], lyrics: label, measures: [label] });
+      }
+      continue;
+    }
+
     // ── @Reference (new format) ──────────────────────────────────────────────
     if (line.startsWith('@')) {
       pendingChords = [];
@@ -137,21 +195,24 @@ function parseBody(body: string): SheetSection[] {
       continue;
     }
 
+    // ── Measure line containing / (new bracket format or old slash format) ──────
+    if (line.includes('/')) {
+      pendingChords = [];
+      addRow(parseMeasureLine(line));
+      continue;
+    }
+
     // ── [Single bracket content] ─────────────────────────────────────────────
     const singleBracket = line.match(/^\[([^\[\]]+)\]$/);
     if (singleBracket) {
       const content = singleBracket[1].trim();
-      // Is it a section name? (contains space, or first char is uppercase non-chord)
       const looksLikeChord = CHORD_ROOT.test(content);
       if (!looksLikeChord) {
-        // New format section header: [Chorus], [Verse 1], etc.
         pendingChords = [];
         startSection(content);
         result.push({ chords: [], lyrics: content, measures: [content] });
-        // (label itself not added to activeRows so @Ref copies only content rows)
         continue;
       } else {
-        // Old-style single chord: [G] — treat as start of old chord line
         pendingChords = [normalizeChord(content)];
         continue;
       }
@@ -165,13 +226,6 @@ function parseBody(body: string): SheetSection[] {
       while ((m = rx.exec(line)) !== null) {
         pendingChords.push(normalizeChord(m[1]));
       }
-      continue;
-    }
-
-    // ── New format: measure line containing / ────────────────────────────────
-    if (line.includes('/')) {
-      pendingChords = [];
-      addRow(parseMeasureLine(line));
       continue;
     }
 
@@ -201,6 +255,8 @@ export function parseSheet(markdown: string): ParsedSheet {
 
 export function extractChords(sections: SheetSection[]): string[] {
   const seen = new Set<string>();
-  sections.forEach(({ chords }) => chords.forEach((c) => { if (c) seen.add(c); }));
+  sections.forEach(({ chords }) => chords.forEach((c) => {
+    if (c) c.split('.').filter(Boolean).forEach(p => seen.add(p));
+  }));
   return [...seen];
 }
