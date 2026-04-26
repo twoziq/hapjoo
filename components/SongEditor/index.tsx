@@ -58,7 +58,7 @@ function generateContent(title: string, artist: string, key: string, gender: str
         if (m.chord) return `[${m.chord}]${m.lyric}`;
         return m.lyric || '';
       });
-      return parts.join(' / ') + ' /';
+      return parts.join(' | ') + ' |';
     });
     return [header, ...rows].join('\n');
   }).join('\n\n');

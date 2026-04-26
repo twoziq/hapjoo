@@ -82,9 +82,9 @@ function parseSegment(seg: string): { chord: string; lyric: string } {
 }
 
 function parseMeasureLine(line: string): SheetSection {
-  const padTo4 = line.includes('//');
-  const clean = line.replace(/\/\//g, '').trim();
-  const segs = clean.split('/');
+  const padTo4 = line.includes('||');
+  const clean = line.replace(/\|\|/g, '').trim();
+  const segs = clean.split('|');
   const chords: string[] = [];
   const measures: string[] = [];
 
@@ -196,7 +196,7 @@ function parseBody(body: string): SheetSection[] {
     }
 
     // ── Measure line containing / (new bracket format or old slash format) ──────
-    if (line.includes('/')) {
+    if (line.includes('|')) {
       pendingChords = [];
       addRow(parseMeasureLine(line));
       continue;
