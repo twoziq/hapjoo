@@ -7,18 +7,58 @@ import SheetViewer from '@/components/SheetViewer';
 
 interface Props { markdown: string; songId: string; }
 
+type TimeSig = '4/4' | '3/4' | '6/8';
+const TIME_SIG_OPTIONS: TimeSig[] = ['4/4', '3/4', '6/8'];
+
+function getBeatsPerBar(ts: TimeSig): number {
+  return parseInt(ts.split('/')[0], 10); // 4, 3, 6
+}
+
+function getBeatIntervalMs(ts: TimeSig, bpm: number): number {
+  const d = parseInt(ts.split('/')[1], 10);
+  // 6/8: eighth note tempo
+  return d === 8 ? Math.round(60000 / bpm * 0.5) : Math.round(60000 / bpm);
+}
+
 export default function ViewerClient({ markdown, songId }: Props) {
   const [semitones, setSemitones]         = useState(0);
   const [showNotes, setShowNotes]         = useState(true);
-  const [headerCollapsed, setHeader]      = useState(false);
+  const [headerCollapsed, setHeaderRaw]   = useState(false);
   const [showHelp, setShowHelp]           = useState(false);
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
 
   const [bpm, setBpm]           = useState<number>((meta.bpm as number) || 80);
   const [bpmEditing, setBpmEd]  = useState(false);
   const [bpmDraft, setBpmDraft] = useState('');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playIdx, setPlayIdx]     = useState(0);
+
+  const [timeSig, setTimeSig]       = useState<TimeSig>('4/4');
+  const [timeSigOpen, setTsOpen]    = useState(false);
+  const tsLongRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lifted editMode state
+  const [editMode, setEditMode] = useState(false);
+
+  // Playback
+  const [isPlaying, setIsPlaying]       = useState(false);
+  const [isCountingIn, setIsCountingIn] = useState(false);
+  const [playIdx, setPlayIdx]           = useState(0);
+
+  // Beat indicator: beat = current beat index (0-based), tick increments each beat for key animation
+  const [beatState, setBeatState] = useState<{ beat: number; tick: number }>({ beat: -1, tick: 0 });
+
+  // Refs for imperative control (avoid stale closures in intervals)
+  const phaseRef          = useRef<'idle' | 'countIn' | 'playing'>('idle');
+  const beatsPerBarRef    = useRef(getBeatsPerBar(timeSig));
+  const beatIntervalRef   = useRef(getBeatIntervalMs(timeSig, bpm));
+  const countInCountRef   = useRef(0);
+  const beatTimerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const measureTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Keep refs in sync
+  useEffect(() => {
+    beatsPerBarRef.current  = getBeatsPerBar(timeSig);
+    beatIntervalRef.current = getBeatIntervalMs(timeSig, bpm);
+  }, [timeSig, bpm]);
 
   const flatMeasures = useMemo(() => {
     const r: { si: number; mi: number }[] = [];
@@ -31,48 +71,137 @@ export default function ViewerClient({ markdown, songId }: Props) {
     return r;
   }, [sections]);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // ── Stop everything ────────────────────────────────────────────
+  function stopAll() {
+    if (beatTimerRef.current)    { clearInterval(beatTimerRef.current);    beatTimerRef.current = null; }
+    if (measureTimerRef.current) { clearInterval(measureTimerRef.current); measureTimerRef.current = null; }
+    phaseRef.current = 'idle';
+    setIsPlaying(false);
+    setIsCountingIn(false);
+    setBeatState({ beat: -1, tick: 0 });
+  }
+
+  // ── Launch beat ticker (shared by count-in and playing) ────────
+  function launchBeatTicker() {
+    if (beatTimerRef.current) clearInterval(beatTimerRef.current);
+    countInCountRef.current = 0;
+    // Show beat 0 immediately
+    setBeatState({ beat: 0, tick: 1 });
+
+    beatTimerRef.current = setInterval(() => {
+      setBeatState(prev => ({
+        beat: (prev.beat + 1) % beatsPerBarRef.current,
+        tick: prev.tick + 1,
+      }));
+      countInCountRef.current++;
+      if (phaseRef.current === 'countIn' && countInCountRef.current >= beatsPerBarRef.current) {
+        // Count-in done → start playing
+        phaseRef.current = 'playing';
+        setIsCountingIn(false);
+        setIsPlaying(true);
+        countInCountRef.current = 0;
+      }
+    }, beatIntervalRef.current);
+  }
+
+  // ── Measure timer (starts when isPlaying becomes true) ────────
   useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (measureTimerRef.current) clearInterval(measureTimerRef.current);
     if (!isPlaying) return;
-    timerRef.current = setInterval(() => {
+
+    measureTimerRef.current = setInterval(() => {
       setPlayIdx(prev => {
         const next = prev + 1;
-        if (next >= flatMeasures.length) { setIsPlaying(false); return 0; }
+        if (next >= flatMeasures.length) {
+          stopAll();
+          return 0;
+        }
         return next;
       });
-    }, Math.round(60000 / bpm * 2));        // ×2 = 반박자씩 (한 마디)
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, Math.round(60000 / bpm * 2));
+
+    return () => { if (measureTimerRef.current) clearInterval(measureTimerRef.current); };
   }, [isPlaying, bpm, flatMeasures.length]);
 
-  const currentPos = isPlaying ? (flatMeasures[playIdx] ?? null) : null;
-  const currentKey = transposeNote((meta.key as string) ?? 'C', semitones);
-
+  // ── Toggle play ────────────────────────────────────────────────
   function togglePlay() {
-    if (isPlaying) setIsPlaying(false);
-    else setIsPlaying(true);
+    if (phaseRef.current !== 'idle') {
+      stopAll();
+      return;
+    }
+    setPlayIdx(0);
+    phaseRef.current = 'countIn';
+    setIsCountingIn(true);
+    launchBeatTicker();
   }
 
   function onCellTap(si: number, mi: number) {
     const idx = flatMeasures.findIndex(m => m.si === si && m.mi === mi);
-    if (idx >= 0) { setPlayIdx(idx); if (!isPlaying) setIsPlaying(true); }
+    if (idx < 0) return;
+    setPlayIdx(idx);
+    if (phaseRef.current === 'idle') {
+      // Start playing directly from this cell (no count-in)
+      phaseRef.current = 'playing';
+      setIsPlaying(true);
+      launchBeatTicker();
+    }
   }
 
-  // BPM long-press to enter number
-  const bpmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function bpmDown() { bpmTimer.current = setTimeout(() => { setBpmDraft(String(bpm)); setBpmEd(true); }, 500); }
-  function bpmUp()   { if (bpmTimer.current) clearTimeout(bpmTimer.current); }
+  // ── BPM editing ───────────────────────────────────────────────
+  const bpmLongRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function bpmDown() { bpmLongRef.current = setTimeout(() => { setBpmDraft(String(bpm)); setBpmEd(true); }, 500); }
+  function bpmUp()   { if (bpmLongRef.current) clearTimeout(bpmLongRef.current); }
   function commitBpm() {
     const v = parseInt(bpmDraft, 10);
     if (v >= 20 && v <= 300) setBpm(v);
     setBpmEd(false);
   }
+  function adjustBpm(delta: number) {
+    setBpm(prev => Math.min(300, Math.max(20, prev + delta)));
+  }
+
+  // ── Header collapse (also collapses edit mode) ─────────────────
+  function setHeader(collapsed: boolean) {
+    setHeaderRaw(collapsed);
+    if (collapsed) setEditMode(false);
+  }
+
+  // ── Time sig long-press ────────────────────────────────────────
+  function tsDown() { tsLongRef.current = setTimeout(() => setTsOpen(true), 500); }
+  function tsUp()   { if (tsLongRef.current) clearTimeout(tsLongRef.current); }
+
+  const currentPos = (isPlaying || isCountingIn) ? (flatMeasures[playIdx] ?? null) : null;
+  const currentKey = transposeNote((meta.key as string) ?? 'C', semitones);
+  const beatsPerBar = getBeatsPerBar(timeSig);
+  const showBeatBar = isPlaying || isCountingIn;
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Sticky header ───────────────────────────────────── */}
+      {/* ── Sticky header ─────────────────────────────────────── */}
       <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
+
+          {/* Beat indicator row (always visible when playing/counting) */}
+          {showBeatBar && (
+            <div className="flex items-center justify-center gap-2 mb-2">
+              {Array.from({ length: beatsPerBar }).map((_, i) => {
+                const isActive = i === beatState.beat;
+                return (
+                  <span
+                    key={isActive ? `b${i}_${beatState.tick}` : `b${i}`}
+                    className={`inline-block rounded-full transition-colors duration-75 ${
+                      isActive
+                        ? `w-5 h-5 beat-pulse ${isCountingIn ? 'bg-amber-400' : 'bg-red-500'}`
+                        : 'w-4 h-4 bg-green-200'
+                    }`}
+                  />
+                );
+              })}
+              {isCountingIn && (
+                <span className="text-[10px] text-amber-500 font-semibold ml-1">카운트인...</span>
+              )}
+            </div>
+          )}
 
           {/* Row 1: title + icon buttons */}
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -87,16 +216,20 @@ export default function ViewerClient({ markdown, songId }: Props) {
             )}
             <button onClick={() => setShowHelp(true)}
               className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xs font-bold shrink-0">?</button>
-            <button onClick={() => setHeader(c => !c)}
-              className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 shrink-0 text-xs">
-              {headerCollapsed ? '▾' : '▴'}
+            <button onClick={() => setHeader(!headerCollapsed)}
+              className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0">
+              {headerCollapsed ? (
+                <><span className="text-[13px]">▾</span><span>펼치기</span></>
+              ) : (
+                <><span className="text-[13px]">▴</span><span>접기</span></>
+              )}
             </button>
           </div>
 
           {/* Row 2: controls (collapsible) */}
           {!headerCollapsed && (
             <div className="flex items-center gap-1">
-              {/* Key transpose — compact */}
+              {/* Key transpose */}
               <button onClick={() => setSemitones(s => s - 1)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200">−</button>
               <span className="text-sm font-black text-indigo-600 w-7 text-center">{currentKey}</span>
@@ -113,23 +246,55 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
               <div className="flex-1" />
 
-              {/* BPM — long press to edit */}
-              {bpmEditing ? (
-                <input autoFocus value={bpmDraft} onChange={e => setBpmDraft(e.target.value)}
-                  onBlur={commitBpm}
-                  onKeyDown={e => { if (e.key === 'Enter') commitBpm(); if (e.key === 'Escape') setBpmEd(false); }}
-                  className="w-14 text-center text-sm font-mono font-bold border-b-2 border-indigo-400 outline-none bg-transparent" />
-              ) : (
-                <button onPointerDown={bpmDown} onPointerUp={bpmUp} onPointerLeave={bpmUp}
-                  className="text-sm font-mono font-bold text-gray-500 px-1 select-none touch-none">
-                  {bpm}<span className="text-[10px] font-normal ml-0.5 text-gray-400">bpm</span>
+              {/* Time signature (long-press) */}
+              <div className="relative">
+                <button
+                  onPointerDown={tsDown} onPointerUp={tsUp} onPointerLeave={tsUp}
+                  className="text-[11px] font-bold text-gray-500 px-1.5 h-6 rounded bg-gray-100 select-none touch-none">
+                  {timeSig}
                 </button>
-              )}
+                {timeSigOpen && (
+                  <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
+                    {TIME_SIG_OPTIONS.map(ts => (
+                      <button key={ts}
+                        onClick={() => { setTimeSig(ts); setTsOpen(false); }}
+                        className={`block w-full px-5 py-2 text-sm font-semibold text-left ${
+                          ts === timeSig ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                        }`}>{ts}</button>
+                    ))}
+                    <button onClick={() => setTsOpen(false)}
+                      className="block w-full px-5 py-2 text-xs text-gray-400 border-t border-gray-100">취소</button>
+                  </div>
+                )}
+              </div>
+
+              {/* BPM with +/- */}
+              <div className="flex items-center gap-0.5 ml-1">
+                <button onClick={() => adjustBpm(-1)}
+                  className="w-6 h-6 flex items-center justify-center rounded-l-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200 select-none">−</button>
+                {bpmEditing ? (
+                  <input autoFocus value={bpmDraft} onChange={e => setBpmDraft(e.target.value)}
+                    onBlur={commitBpm}
+                    onKeyDown={e => { if (e.key === 'Enter') commitBpm(); if (e.key === 'Escape') setBpmEd(false); }}
+                    className="w-12 text-center text-sm font-mono font-bold border-y border-gray-200 outline-none bg-white h-6" />
+                ) : (
+                  <button onPointerDown={bpmDown} onPointerUp={bpmUp} onPointerLeave={bpmUp}
+                    className="text-sm font-mono font-bold text-gray-500 px-1 h-6 bg-gray-50 border-y border-gray-200 select-none touch-none min-w-[2.5rem] text-center">
+                    {bpm}<span className="text-[9px] font-normal text-gray-400">bpm</span>
+                  </button>
+                )}
+                <button onClick={() => adjustBpm(1)}
+                  className="w-6 h-6 flex items-center justify-center rounded-r-lg bg-gray-100 text-gray-600 font-bold text-sm active:bg-gray-200 select-none">+</button>
+              </div>
 
               {/* Play */}
               <button onClick={togglePlay}
-                className={`h-7 w-8 flex items-center justify-center rounded-full text-xs font-bold ml-1 transition-colors ${isPlaying ? 'bg-red-100 text-red-600' : 'bg-indigo-600 text-white'}`}>
-                {isPlaying ? '■' : '▶'}
+                className={`h-7 w-8 flex items-center justify-center rounded-full text-xs font-bold ml-1 transition-colors ${
+                  isCountingIn ? 'bg-amber-100 text-amber-600' :
+                  isPlaying    ? 'bg-red-100 text-red-600' :
+                                 'bg-indigo-600 text-white'
+                }`}>
+                {isPlaying || isCountingIn ? '■' : '▶'}
               </button>
 
               {/* Notes toggle */}
@@ -143,7 +308,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
       </div>
 
       {/* ── Sheet body ──────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4" onClick={() => timeSigOpen && setTsOpen(false)}>
         <div className="max-w-2xl mx-auto">
           <SheetViewer
             sections={sections}
@@ -152,6 +317,8 @@ export default function ViewerClient({ markdown, songId }: Props) {
             showNotes={showNotes}
             songId={songId}
             isPlaying={isPlaying}
+            editMode={editMode}
+            setEditMode={setEditMode}
             onCellTap={onCellTap}
           />
         </div>
@@ -168,12 +335,14 @@ export default function ViewerClient({ markdown, songId }: Props) {
               <button onClick={() => setShowHelp(false)} className="text-gray-400 text-2xl leading-none">×</button>
             </div>
             <div className="flex flex-col gap-3">
-              <HelpRow icon="▶" title="재생 / 정지">마디 클릭 → 해당 위치부터 재생 시작. 재생 중 자동 스크롤.</HelpRow>
-              <HelpRow icon="↯" title="BPM 꾹 누르기">BPM 숫자를 길게 누르면 직접 입력 가능.</HelpRow>
-              <HelpRow icon="▴▾" title="헤더 접기">우측 상단 버튼으로 상단 컨트롤을 접어 악보 공간 확보.</HelpRow>
-              <HelpRow icon="💬" title="마디 꾹 누르기 (일반 모드)">메모 입력 → 말풍선으로 표시. 메모 체크 해제 시 삼각형만 표시.</HelpRow>
+              <HelpRow icon="▶" title="재생 / 정지">마디 클릭 → 해당 위치부터 바로 재생. ▶ 버튼은 카운트인 후 시작.</HelpRow>
+              <HelpRow icon="🥁" title="메트로놈">재생 시 상단에 박자 동글뱅이 표시. 카운트인은 주황색, 재생 중은 빨간색.</HelpRow>
+              <HelpRow icon="♩" title="박자표 꾹 누르기">4/4 · 3/4 · 6/8 중 선택. 카운트인 박수 수도 함께 적용.</HelpRow>
+              <HelpRow icon="↯" title="BPM 꾹 누르기">BPM 숫자를 길게 누르면 직접 입력. +/- 버튼으로 1씩 조절.</HelpRow>
+              <HelpRow icon="접기" title="헤더 접기">접기/펼치기 버튼으로 상단 컨트롤 토글. 접으면 편집 모드도 해제.</HelpRow>
+              <HelpRow icon="💬" title="마디 꾹 누르기 (일반 모드)">메모 입력 → 말풍선으로 표시.</HelpRow>
               <HelpRow icon="✎" title="편집 모드">
-                {'• 섹션 이름 꾹 누르기 → 이름 변경\n• ▲▼ 블록 순서 이동\n• ⊕ 블록 복사\n• ✕ 블록 삭제\n• 마디 꾹 누르기 → 행 선택\n• 선택 행에 구간 이름 붙이기\n• 원본 복귀 버튼으로 초기화'}
+                {'• 섹션 이름 꾹 누르기 → 이름 변경\n• ▲▼ 블록 순서 이동\n• ⊕ 블록 복사\n• ✕ 블록 삭제\n• 마디 꾹 누르기 → 행 선택 후 구간 이름 붙이기\n• 블록 사이 + 버튼 → 새 구간 추가\n• 원본 복귀 버튼으로 초기화'}
               </HelpRow>
             </div>
           </div>

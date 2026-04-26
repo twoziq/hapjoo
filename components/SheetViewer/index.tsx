@@ -13,6 +13,8 @@ interface Props {
   showNotes: boolean;
   songId: string;
   isPlaying: boolean;
+  editMode: boolean;
+  setEditMode: (v: boolean) => void;
   onCellTap: (si: number, mi: number) => void;
 }
 
@@ -45,7 +47,6 @@ function flatten(blocks: Block[]): OSection[] {
   return blocks.flatMap(b => [...(b.label ? [b.label] : []), ...b.rows]);
 }
 
-// Note key uses originalIdx so notes survive reset
 function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}`; }
 
 // ── Long-press hook ────────────────────────────────────────────────────────
@@ -60,11 +61,10 @@ function useLongPress(cb: () => void, ms = 500) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function SheetViewer({ sections, semitones, currentPos, showNotes, songId, isPlaying, onCellTap }: Props) {
+export default function SheetViewer({ sections, semitones, currentPos, showNotes, songId, isPlaying, editMode, setEditMode, onCellTap }: Props) {
   const [activeChord, setActiveChord] = useState<string | null>(null);
   const [oSections, setOSections]     = useState<OSection[]>(() => makeOS(sections));
   const [labels, setLabels]           = useState<Record<string, string>>({});
-  const [editMode, setEditMode]       = useState(false);
   const [selected, setSelected]       = useState<Set<string>>(new Set());
   const [subActive, setSubActive]     = useState(false);
   const [subInput, setSubInput]       = useState('');
@@ -72,8 +72,8 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   const [labelDraft, setLabelDraft]   = useState('');
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
+  const [animBlockIds, setAnimBlockIds] = useState<Set<string>>(new Set());
 
-  // Notes persisted via localStorage, keyed by originalIdx
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem(`hapjoo_notes_${songId}`) ?? '{}'); }
     catch { return {}; }
@@ -90,7 +90,6 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
     persistNotes(next);
   }
 
-  // Measure refs for auto-scroll
   const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
   useEffect(() => {
     if (!currentPos || !isPlaying) return;
@@ -101,7 +100,7 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
 
   const blocks = toBlocks(oSections);
 
-  // ── Block operations ─────────────────────────────────────
+  // ── Block operations ───────────────────────────────────────────
   function moveBlock(bi: number, dir: -1 | 1) {
     const nb = [...blocks], ti = bi + dir;
     if (ti < 0 || ti >= nb.length) return;
@@ -135,6 +134,26 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
     setEditMode(false);
   }
 
+  // ── Insert new section between blocks ────────────────────────
+  function insertSection(afterBi: number) {
+    const uid = `new_${Date.now()}`;
+    const newOS: OSection = {
+      uid,
+      originalIdx: -1,
+      section: { chords: [], lyrics: '새 구간', measures: ['새 구간'] },
+    };
+    const newBlock: Block = { id: uid, label: newOS, rows: [] };
+    const nb = [...blocks];
+    nb.splice(afterBi + 1, 0, newBlock);
+    setOSections(flatten(nb));
+    // Trigger animation
+    setAnimBlockIds(prev => new Set([...prev, uid]));
+    setTimeout(() => setAnimBlockIds(prev => { const n = new Set(prev); n.delete(uid); return n; }), 500);
+    // Auto-open label editing
+    setLabelDraft('새 구간');
+    setEditingUid(uid);
+  }
+
   function createSubLabel() {
     if (!subInput.trim() || !selected.size) return;
     const next: OSection[] = []; let done = false;
@@ -161,7 +180,7 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <button
-          onClick={() => { setEditMode(e => !e); setSelected(new Set()); setSubActive(false); }}
+          onClick={() => { setEditMode(!editMode); setSelected(new Set()); setSubActive(false); }}
           className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${editMode ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'}`}
         >{editMode ? '✓ 편집 완료' : '✎ 편집'}</button>
 
@@ -191,97 +210,101 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
 
       {/* Blocks */}
       {blocks.map((block, bi) => (
-        <div key={block.id} className="mb-3">
-
-          {/* Section label */}
-          {block.label && (
-            <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
-              {editMode && (
-                <div className="flex items-center gap-0.5 mr-1 shrink-0">
-                  <button onClick={() => moveBlock(bi, -1)} disabled={bi === 0}
-                    className="w-5 h-5 text-[10px] text-gray-300 hover:text-gray-600 disabled:opacity-20">▲</button>
-                  <button onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1}
-                    className="w-5 h-5 text-[10px] text-gray-300 hover:text-gray-600 disabled:opacity-20">▼</button>
-                  <button onClick={() => copyBlock(bi)} title="복사"
-                    className="w-5 h-5 text-[11px] text-gray-300 hover:text-indigo-500">⊕</button>
-                  <button onClick={() => deleteBlock(bi)} title="삭제"
-                    className="w-5 h-5 text-[11px] text-gray-300 hover:text-red-500">✕</button>
-                </div>
-              )}
-              {editingUid === block.label.uid ? (
-                <input autoFocus value={labelDraft} onChange={e => setLabelDraft(e.target.value)}
-                  onBlur={() => commitLabel(block.label!.uid, labelDraft)}
-                  onKeyDown={e => { if (e.key === 'Enter') commitLabel(block.label!.uid, labelDraft); if (e.key === 'Escape') setEditingUid(null); }}
-                  className="text-[11px] font-bold tracking-widest uppercase text-indigo-500 border-b border-indigo-400 outline-none bg-transparent w-36" />
-              ) : (
-                <LabelSpan
-                  text={labels[block.label.uid] ?? block.label.section.lyrics ?? ''}
-                  onLongPress={() => {
-                    setLabelDraft(labels[block.label!.uid] ?? block.label!.section.lyrics ?? '');
-                    setEditingUid(block.label!.uid);
-                    setEditMode(true);
-                  }}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Row grid — no overflow-hidden so bubbles can show */}
-          <div className="grid grid-cols-4 gap-px bg-gray-200 rounded-xl border border-gray-200"
-            style={{ overflow: 'visible' }}>
-            {block.rows.flatMap(os => {
-              const chords   = os.section.chords.map(tr);
-              const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
-              const count    = measures.length;
-              const oneToOne = chords.length === count;
-              const isRowSel = editMode && selected.has(os.uid);
-
-              return measures.map((lyric, mi) => {
-                const barChords = oneToOne
-                  ? (chords[mi] ? [chords[mi]] : [])
-                  : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
-
-                const key     = `${os.uid}_${mi}`;
-                const nk      = noteKey(os.originalIdx, mi);
-                const note    = os.originalIdx >= 0 ? notes[nk] : undefined;
-                const isCur   = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
-                // Corner rounding
-                const totalCells = measures.length * block.rows.length; // approx
-                const flatIdx = block.rows.indexOf(os) * measures.length + mi; // not perfect but ok
-                // We handle corners via CSS on first/last cells in rows
-                const isFirstCell = block.rows.indexOf(os) === 0 && mi === 0;
-                const isLastCell  = block.rows.indexOf(os) === block.rows.length - 1 && mi === measures.length - 1;
-                const colIdx = mi % 4;
-                const isLastRow = block.rows.indexOf(os) === block.rows.length - 1;
-                const isFirstRow = block.rows.indexOf(os) === 0;
-
-                return (
-                  <MeasureCell
-                    key={key}
-                    cellKey={key}
-                    cellRefs={cellRefs}
-                    isCurrent={isCur}
-                    isRowSelected={isRowSel}
-                    chords={barChords}
-                    lyric={lyric}
-                    note={note}
-                    showNotes={showNotes}
-                    editMode={editMode}
-                    colIdx={colIdx}
-                    isFirstRow={isFirstRow}
-                    isLastRow={isLastRow}
-                    totalCols={Math.min(count, 4)}
-                    onChordClick={setActiveChord}
-                    onLongPress={() => editMode
-                      ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
-                      : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
-                    }
-                    onTap={() => onCellTap(os.originalIdx, mi)}
+        <div key={block.id}>
+          <div
+            className={`mb-3 ${animBlockIds.has(block.id) ? 'slide-in-section' : ''}`}
+          >
+            {/* Section label */}
+            {block.label && (
+              <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
+                {editMode && (
+                  <div className="flex items-center gap-0.5 mr-1 shrink-0">
+                    <button onClick={() => moveBlock(bi, -1)} disabled={bi === 0}
+                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-gray-700 disabled:opacity-20">▲</button>
+                    <button onClick={() => moveBlock(bi, 1)} disabled={bi === blocks.length - 1}
+                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-gray-700 disabled:opacity-20">▼</button>
+                    <button onClick={() => copyBlock(bi)} title="복사"
+                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-indigo-500">⊕</button>
+                    <button onClick={() => deleteBlock(bi)} title="삭제"
+                      className="w-5 h-5 text-[11px] text-gray-400 hover:text-red-500">✕</button>
+                  </div>
+                )}
+                {editingUid === block.label.uid ? (
+                  <input autoFocus value={labelDraft} onChange={e => setLabelDraft(e.target.value)}
+                    onBlur={() => commitLabel(block.label!.uid, labelDraft)}
+                    onKeyDown={e => { if (e.key === 'Enter') commitLabel(block.label!.uid, labelDraft); if (e.key === 'Escape') setEditingUid(null); }}
+                    className="text-[11px] font-bold tracking-widest uppercase text-indigo-500 border-b border-indigo-400 outline-none bg-transparent w-36" />
+                ) : (
+                  <LabelSpan
+                    text={labels[block.label.uid] ?? block.label.section.lyrics ?? ''}
+                    onLongPress={() => {
+                      setLabelDraft(labels[block.label!.uid] ?? block.label!.section.lyrics ?? '');
+                      setEditingUid(block.label!.uid);
+                      setEditMode(true);
+                    }}
                   />
-                );
-              });
-            })}
+                )}
+              </div>
+            )}
+
+            {/* Row grid */}
+            {block.rows.length > 0 && (
+              <div className="grid grid-cols-4 gap-px bg-gray-200 rounded-xl border border-gray-200"
+                style={{ overflow: 'visible' }}>
+                {block.rows.flatMap(os => {
+                  const chords   = os.section.chords.map(tr);
+                  const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
+                  const count    = measures.length;
+                  const oneToOne = chords.length === count;
+                  const isRowSel = editMode && selected.has(os.uid);
+
+                  return measures.map((lyric, mi) => {
+                    const barChords = oneToOne
+                      ? (chords[mi] ? [chords[mi]] : [])
+                      : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
+
+                    const key   = `${os.uid}_${mi}`;
+                    const nk    = noteKey(os.originalIdx, mi);
+                    const note  = os.originalIdx >= 0 ? notes[nk] : undefined;
+                    const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
+                    const colIdx     = mi % 4;
+                    const isLastRow  = block.rows.indexOf(os) === block.rows.length - 1;
+                    const isFirstRow = block.rows.indexOf(os) === 0;
+
+                    return (
+                      <MeasureCell
+                        key={key}
+                        cellKey={key}
+                        cellRefs={cellRefs}
+                        isCurrent={isCur}
+                        isRowSelected={isRowSel}
+                        chords={barChords}
+                        lyric={lyric}
+                        note={note}
+                        showNotes={showNotes}
+                        editMode={editMode}
+                        colIdx={colIdx}
+                        isFirstRow={isFirstRow}
+                        isLastRow={isLastRow}
+                        totalCols={Math.min(count, 4)}
+                        onChordClick={setActiveChord}
+                        onLongPress={() => editMode
+                          ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
+                          : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
+                        }
+                        onTap={() => onCellTap(os.originalIdx, mi)}
+                      />
+                    );
+                  });
+                })}
+              </div>
+            )}
           </div>
+
+          {/* Insert-section button between blocks (edit mode) */}
+          {editMode && (
+            <InsertSectionButton onClick={() => insertSection(bi)} />
+          )}
         </div>
       ))}
 
@@ -323,6 +346,29 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
   );
 }
 
+// ── InsertSectionButton ────────────────────────────────────────────────────
+function InsertSectionButton({ onClick }: { onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      className="w-full flex items-center gap-2 py-1 mb-2 group"
+    >
+      <div className={`flex-1 h-px transition-colors ${hover ? 'bg-indigo-300' : 'bg-gray-150'}`} />
+      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all ${
+        hover
+          ? 'bg-indigo-600 text-white border-indigo-600 scale-105'
+          : 'bg-white text-gray-300 border-gray-200'
+      }`}>
+        + 구간 추가
+      </span>
+      <div className={`flex-1 h-px transition-colors ${hover ? 'bg-indigo-300' : 'bg-gray-150'}`} />
+    </button>
+  );
+}
+
 // ── LabelSpan ──────────────────────────────────────────────────────────────
 function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => void }) {
   const lp = useLongPress(onLongPress);
@@ -356,10 +402,8 @@ function MeasureCell({
   onTap: () => void;
 }) {
   const lp = useLongPress(onLongPress);
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
-  // Distinguish tap vs long-press
   function handlePointerDown(e: React.PointerEvent) {
     didLongPress.current = false;
     lp.onPointerDown({ ...e, preventDefault: () => { e.preventDefault(); didLongPress.current = true; } } as any);
@@ -374,7 +418,6 @@ function MeasureCell({
     else    cellRefs.current.delete(cellKey);
   }, [cellKey]);
 
-  // Corner rounding
   const roundTl = isFirstRow && colIdx === 0            ? 'rounded-tl-xl' : '';
   const roundTr = isFirstRow && colIdx === totalCols - 1 ? 'rounded-tr-xl' : '';
   const roundBl = isLastRow  && colIdx === 0            ? 'rounded-bl-xl' : '';
@@ -393,7 +436,6 @@ function MeasureCell({
       onPointerCancel={lp.onPointerCancel}
       onPointerLeave={lp.onPointerLeave}
     >
-      {/* Note bubble — inside cell, no overflow issues */}
       {note ? (
         <div className="flex flex-col items-center mb-0.5 pt-1">
           {showNotes ? (
@@ -413,7 +455,6 @@ function MeasureCell({
         <div className="pt-1.5" />
       )}
 
-      {/* Chords */}
       <div className="flex gap-1 flex-wrap min-h-[1.1rem] mb-0.5">
         {chords.map((chord, i) => (
           <button key={i} onClick={e => { e.stopPropagation(); onChordClick(chord); }}
@@ -423,7 +464,6 @@ function MeasureCell({
         ))}
       </div>
 
-      {/* Lyrics */}
       <p className="text-[13px] text-gray-800 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
         {lyric || ' '}
       </p>

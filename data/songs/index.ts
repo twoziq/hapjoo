@@ -1,7 +1,15 @@
 import noeul from './노을';
 import neoege from './너에게난_나에게넌';
 
-export const SONGS = [
+export interface SongEntry {
+  id: string;
+  title: string;
+  artist: string;
+  key: string;
+  folder?: string; // 폴더명 없으면 기본 목록
+}
+
+export const SONGS: SongEntry[] = [
   { id: 'noeul',  title: '노을',             artist: '김광석',        key: 'G' },
   { id: 'neoege', title: '너에게난 나에게넌', artist: '자전거탄 풍경', key: 'G' },
 ];
@@ -10,4 +18,19 @@ const CONTENT: Record<string, string> = { noeul, neoege };
 
 export function getSongMarkdown(id: string): string {
   return CONTENT[id] ?? '';
+}
+
+// 폴더별 그룹화 헬퍼
+export function getSongsByFolder(): { folder: string | null; songs: SongEntry[] }[] {
+  const map = new Map<string | null, SongEntry[]>();
+  for (const s of SONGS) {
+    const f = s.folder ?? null;
+    if (!map.has(f)) map.set(f, []);
+    map.get(f)!.push(s);
+  }
+  const result: { folder: string | null; songs: SongEntry[] }[] = [];
+  // null(기본) 먼저
+  if (map.has(null)) result.push({ folder: null, songs: map.get(null)! });
+  map.forEach((songs, folder) => { if (folder !== null) result.push({ folder, songs }); });
+  return result;
 }
