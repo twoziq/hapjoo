@@ -57,7 +57,8 @@ function sheetToEditorData(parsed: ReturnType<typeof parseSheet>) {
 }
 
 export default async function EditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = decodeURIComponent(rawId);
   let markdown = getSongContent(id) ?? '';
 
   if (supabase) {

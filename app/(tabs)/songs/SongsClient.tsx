@@ -60,7 +60,7 @@ export default function SongsClient({ groups }: { groups: { folder: string | nul
                 {list.map(song => (
                   <li key={song.id}>
                     <Link
-                      href={`/viewer/${encodeURIComponent(song.id)}`}
+                      href={`/viewer/${song.id}`}
                       className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
                     >
                       <div>
