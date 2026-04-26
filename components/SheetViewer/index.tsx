@@ -247,55 +247,55 @@ export default function SheetViewer({ sections, semitones, currentPos, showNotes
               </div>
             )}
 
-            {/* Row grid */}
+            {/* Row grids — each OSection gets its own sub-grid so row lengths don't bleed into each other */}
             {block.rows.length > 0 && (
-              <div className="grid grid-cols-4 gap-px bg-gray-200 rounded-xl border border-gray-200"
-                style={{ overflow: 'visible' }}>
-                {block.rows.flatMap(os => {
+              <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
+                {block.rows.map(os => {
                   const chords   = os.section.chords.map(tr);
                   const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
                   const count    = measures.length;
                   const oneToOne = chords.length === count;
                   const isRowSel = editMode && selected.has(os.uid);
+                  // ≤4 measures: use exact column count; >4: wrap in grid-cols-4
+                  const cols = count <= 4 ? count : 4;
 
-                  return measures.map((lyric, mi) => {
-                    const barChords = oneToOne
-                      ? (chords[mi] ? [chords[mi]] : [])
-                      : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
+                  return (
+                    <div key={os.uid}
+                      className="grid gap-px bg-gray-200"
+                      style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+                      {measures.map((lyric, mi) => {
+                        const barChords = oneToOne
+                          ? (chords[mi] ? [chords[mi]] : [])
+                          : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
 
-                    const key   = `${os.uid}_${mi}`;
-                    const nk    = noteKey(os.originalIdx, mi);
-                    const note  = os.originalIdx >= 0 ? notes[nk] : undefined;
-                    const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
-                    const colIdx     = mi % 4;
-                    const isLastRow  = block.rows.indexOf(os) === block.rows.length - 1;
-                    const isFirstRow = block.rows.indexOf(os) === 0;
+                        const key  = `${os.uid}_${mi}`;
+                        const nk   = noteKey(os.originalIdx, mi);
+                        const note = os.originalIdx >= 0 ? notes[nk] : undefined;
+                        const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
 
-                    return (
-                      <MeasureCell
-                        key={key}
-                        cellKey={key}
-                        cellRefs={cellRefs}
-                        isCurrent={isCur}
-                        isRowSelected={isRowSel}
-                        chords={barChords}
-                        lyric={lyric}
-                        note={note}
-                        showNotes={showNotes}
-                        editMode={editMode}
-                        colIdx={colIdx}
-                        isFirstRow={isFirstRow}
-                        isLastRow={isLastRow}
-                        totalCols={Math.min(count, 4)}
-                        onChordClick={setActiveChord}
-                        onLongPress={() => editMode
-                          ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
-                          : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
-                        }
-                        onTap={() => onCellTap(os.originalIdx, mi)}
-                      />
-                    );
-                  });
+                        return (
+                          <MeasureCell
+                            key={key}
+                            cellKey={key}
+                            cellRefs={cellRefs}
+                            isCurrent={isCur}
+                            isRowSelected={isRowSel}
+                            chords={barChords}
+                            lyric={lyric}
+                            note={note}
+                            showNotes={showNotes}
+                            editMode={editMode}
+                            onChordClick={setActiveChord}
+                            onLongPress={() => editMode
+                              ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
+                              : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
+                            }
+                            onTap={() => onCellTap(os.originalIdx, mi)}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
                 })}
               </div>
             )}
@@ -380,9 +380,10 @@ function LabelSpan({ text, onLongPress }: { text: string; onLongPress: () => voi
 }
 
 // ── MeasureCell ────────────────────────────────────────────────────────────
+// Corner rounding is handled by the parent container (overflow-hidden rounded-xl)
 function MeasureCell({
   cellKey, cellRefs, isCurrent, isRowSelected, chords, lyric, note, showNotes,
-  editMode, colIdx, isFirstRow, isLastRow, totalCols, onChordClick, onLongPress, onTap,
+  editMode, onChordClick, onLongPress, onTap,
 }: {
   cellKey: string;
   cellRefs: React.MutableRefObject<Map<string, HTMLElement>>;
@@ -393,10 +394,6 @@ function MeasureCell({
   note?: string;
   showNotes: boolean;
   editMode: boolean;
-  colIdx: number;
-  isFirstRow: boolean;
-  isLastRow: boolean;
-  totalCols: number;
   onChordClick: (c: string) => void;
   onLongPress: () => void;
   onTap: () => void;
@@ -418,16 +415,10 @@ function MeasureCell({
     else    cellRefs.current.delete(cellKey);
   }, [cellKey]);
 
-  const roundTl = isFirstRow && colIdx === 0            ? 'rounded-tl-xl' : '';
-  const roundTr = isFirstRow && colIdx === totalCols - 1 ? 'rounded-tr-xl' : '';
-  const roundBl = isLastRow  && colIdx === 0            ? 'rounded-bl-xl' : '';
-  const roundBr = isLastRow  && colIdx === totalCols - 1 ? 'rounded-br-xl' : '';
-
   return (
     <div
       ref={setRef as any}
       className={`bg-white px-2 pb-2 transition-colors relative
-        ${roundTl} ${roundTr} ${roundBl} ${roundBr}
         ${isCurrent     ? 'bg-indigo-50 ring-2 ring-inset ring-indigo-400' : ''}
         ${isRowSelected ? '!bg-amber-50 ring-1 ring-inset ring-amber-300' : ''}
       `}

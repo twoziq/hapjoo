@@ -96,7 +96,11 @@ function parseBody(body: string): SheetSection[] {
   let pendingChords: string[] = []; // old format: chord line awaiting lyric line
 
   function flushNamed() {
-    if (activeName) named.set(activeName, [...activeRows]);
+    // Only save if there are actual content rows — prevents empty repetitions
+    // from overwriting a previously defined section (e.g. @Chorus under [Chorus])
+    if (activeName && activeRows.length > 0) {
+      named.set(activeName, [...activeRows]);
+    }
   }
 
   function addRow(row: SheetSection) {
