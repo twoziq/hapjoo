@@ -27,22 +27,26 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: rawId } = await params;
-  const id = decodeURIComponent(rawId);
-
-  const filePath = findSongPath(id);
-  if (!filePath) {
-    return Response.json({ error: '악보를 찾을 수 없어요.' }, { status: 404 });
-  }
-
   try {
-    const { content } = await request.json();
-    if (typeof content !== 'string') {
-      return Response.json({ error: '잘못된 요청입니다.' }, { status: 400 });
+    const { id: rawId } = await params;
+    const id = decodeURIComponent(rawId);
+
+    const filePath = findSongPath(id);
+    if (!filePath) {
+      return Response.json({ error: `악보를 찾을 수 없어요. (id: ${id})` }, { status: 404 });
     }
+
+    const body = await request.json();
+    const content = body?.content;
+    if (typeof content !== 'string') {
+      return Response.json({ error: `content 타입 오류: ${typeof content}` }, { status: 400 });
+    }
+
     fs.writeFileSync(filePath, content, 'utf8');
-    return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: '파일 저장 실패' }, { status: 500 });
+    return Response.json({ ok: true, path: filePath });
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    console.error('[PUT /api/songs]', msg);
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
