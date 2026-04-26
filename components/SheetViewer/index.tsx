@@ -49,6 +49,29 @@ function flatten(blocks: Block[]): OSection[] {
 
 function noteKey(originalIdx: number, mi: number) { return `${originalIdx}_${mi}`; }
 
+// ── Smart chord parser (shared with new-song page) ────────────────────────────
+const CHORD_RX = /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+)*(?:\/[A-G][b#]?)?/gi;
+function parseSmartChord(raw: string): string[] | null {
+  const val = raw.trim();
+  if (!val) return null;
+  if (val.includes('.')) {
+    const result = ['', '', '', ''];
+    let pos = 0; let i = 0;
+    while (i < val.length && pos < 4) {
+      if (val[i] === '.') { pos++; i++; continue; }
+      const m = val.slice(i).match(new RegExp('^(' + CHORD_RX.source + ')', 'i'));
+      if (m) { result[pos] = m[1].toUpperCase(); pos++; i += m[1].length; }
+      else i++;
+    }
+    return result;
+  }
+  const matches = [...val.matchAll(CHORD_RX)].map(m => m[0]);
+  if (matches.length < 2) return null;
+  const result = ['', '', '', ''];
+  matches.slice(0, 4).forEach((c, idx) => { result[idx] = c; });
+  return result;
+}
+
 function useLongPress(cb: () => void, ms = 500) {
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   return {
@@ -72,7 +95,6 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
   const [activeNote, setActiveNote]   = useState<{ origIdx: number; mi: number } | null>(null);
   const [noteDraft, setNoteDraft]     = useState('');
   const [animBlockIds, setAnimBlockIds] = useState<Set<string>>(new Set());
-  const [editingRow, setEditingRow]   = useState<OSection | null>(null);
 
   // Block drag state
   const [activeDrag, setActiveDrag]   = useState<{ fromBi: number } | null>(null);
@@ -134,6 +156,12 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
     const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
     const [removed] = nb[bi].rows.splice(fromRi, 1);
     nb[bi].rows.splice(toRi, 0, removed);
+    setOSections(flatten(nb));
+  }
+
+  function removeRowFromBlock(bi: number, ri: number) {
+    const nb = blocks.map(b => ({ ...b, rows: [...b.rows] }));
+    nb[bi].rows.splice(ri, 1);
     setOSections(flatten(nb));
   }
 
@@ -348,46 +376,53 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
             )}
 
             {(block.rows.length > 0 || editMode) && (
-              <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
+              <div className={`rounded-xl border border-gray-200 overflow-hidden flex flex-col ${editMode ? 'divide-y divide-gray-100' : 'gap-px bg-gray-200'}`}>
                 {block.rows.map((os, ri) => {
+                  const isDraggingThis = rowDrag?.bi === bi && rowDrag.fromRi === ri;
+                  const isDragTarget   = rowDragOver?.bi === bi && rowDragOver.ri === ri && rowDrag?.fromRi !== ri;
+
+                  if (editMode) {
+                    return (
+                      <div
+                        key={os.uid}
+                        ref={el => { rowDivRefs.current.set(os.uid, el); }}
+                        className={`transition-opacity ${isDraggingThis ? 'opacity-40' : ''} ${isDragTarget ? 'ring-2 ring-inset ring-indigo-300' : ''}`}
+                      >
+                        <InlineRowEditor
+                          chords={os.section.chords}
+                          measures={os.section.measures}
+                          onChange={(ch, me) => updateRow(os.uid, ch, me)}
+                          onRemove={() => removeRowFromBlock(bi, ri)}
+                          canRemove={block.rows.length > 1}
+                          dragHandleProps={{
+                            onPointerDown: e => handleRowDragPointerDown(e, bi, ri),
+                            onPointerMove: e => handleRowDragPointerMove(e, bi),
+                            onPointerUp:   handleRowDragPointerUp,
+                            onPointerCancel: () => { setRowDrag(null); setRowDragOver(null); },
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // ── View mode ────────────────────────────────────
                   const chords   = os.section.chords.map(tr);
                   const measures = os.section.measures?.length ? os.section.measures : [os.section.lyrics ?? ''];
                   const count    = measures.length;
                   const oneToOne = chords.length === count;
-                  const isRowSel = editMode && selected.has(os.uid);
-                  const cols = count <= 4 ? count : 4;
-                  const isDraggingThis = rowDrag?.bi === bi && rowDrag.fromRi === ri;
-                  const isDragTarget  = rowDragOver?.bi === bi && rowDragOver.ri === ri && rowDrag?.fromRi !== ri;
+                  const cols     = count <= 4 ? count : 4;
 
                   return (
-                    <div
-                      key={os.uid}
-                      ref={el => { rowDivRefs.current.set(os.uid, el); }}
-                      className={`flex items-stretch gap-px bg-gray-200 transition-opacity
-                        ${isDraggingThis ? 'opacity-40' : ''}
-                        ${isDragTarget ? 'ring-2 ring-inset ring-indigo-300' : ''}
-                      `}
-                    >
-                      {editMode && (
-                        <div
-                          className="w-5 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-base bg-white shrink-0"
-                          onPointerDown={e => handleRowDragPointerDown(e, bi, ri)}
-                          onPointerMove={e => handleRowDragPointerMove(e, bi)}
-                          onPointerUp={handleRowDragPointerUp}
-                          onPointerCancel={() => { setRowDrag(null); setRowDragOver(null); }}
-                        >⠿</div>
-                      )}
+                    <div key={os.uid} className="flex items-stretch gap-px bg-gray-200">
                       <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                         {measures.map((lyric, mi) => {
                           const barChords = oneToOne
                             ? (chords[mi] ? [chords[mi]] : [])
                             : chords.slice(Math.floor((mi / count) * chords.length), Math.floor(((mi + 1) / count) * chords.length));
-
                           const key  = `${os.uid}_${mi}`;
                           const nk   = noteKey(os.originalIdx, mi);
                           const note = os.originalIdx >= 0 ? notes[nk] : undefined;
                           const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
-
                           return (
                             <MeasureCell
                               key={key}
@@ -396,24 +431,15 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
                               isCurrent={isCur}
                               cursorActive={cursorActive}
                               isRest={os.section.restFrom !== undefined && mi >= os.section.restFrom}
-                              isRowSelected={isRowSel}
+                              isRowSelected={false}
                               chords={barChords}
                               lyric={lyric}
                               note={note}
                               showNotes={showNotes}
-                              editMode={editMode}
+                              editMode={false}
                               onChordClick={setActiveChord}
-                              onLongPress={() => editMode
-                                ? setSelected(prev => { const n = new Set(prev); n.has(os.uid) ? n.delete(os.uid) : n.add(os.uid); return n; })
-                                : (setActiveNote({ origIdx: os.originalIdx, mi }), setNoteDraft(notes[nk] ?? ''))
-                              }
-                              onTap={() => {
-                                if (editMode) {
-                                  setEditingRow(os);
-                                } else {
-                                  onCellTap(os.originalIdx, mi);
-                                }
-                              }}
+                              onLongPress={() => { setActiveNote({ origIdx: os.originalIdx, mi }); setNoteDraft(notes[nk] ?? ''); }}
+                              onTap={() => onCellTap(os.originalIdx, mi)}
                             />
                           );
                         })}
@@ -464,18 +490,6 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
         </div>
       )}
 
-      {/* Row edit modal */}
-      {editingRow && (
-        <RowEditModal
-          os={editingRow}
-          semitones={semitones}
-          onSave={(chords, measures) => {
-            updateRow(editingRow.uid, chords, measures);
-            setEditingRow(null);
-          }}
-          onClose={() => setEditingRow(null)}
-        />
-      )}
 
       {activeChord && (
         <ChordDiagram
@@ -488,62 +502,78 @@ export default function SheetViewer({ sections, semitones, currentPos, cursorAct
   );
 }
 
-// ── RowEditModal ───────────────────────────────────────────────────────────────
-function RowEditModal({ os, semitones, onSave, onClose }: {
-  os: OSection;
-  semitones: number;
-  onSave: (chords: string[], measures: string[]) => void;
-  onClose: () => void;
+// ── InlineRowEditor ────────────────────────────────────────────────────────────
+function InlineRowEditor({ chords, measures, onChange, onRemove, canRemove, dragHandleProps }: {
+  chords: string[];
+  measures: string[];
+  onChange: (chords: string[], measures: string[]) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+  dragHandleProps: {
+    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: () => void;
+    onPointerCancel: () => void;
+  };
 }) {
   const CELLS = 4;
-  const initChords   = [...os.section.chords,   '', '', '', ''].slice(0, CELLS);
-  const initMeasures = [...(os.section.measures ?? [os.section.lyrics ?? '']), '', '', '', ''].slice(0, CELLS);
-
-  const [chords,   setChords]   = useState(initChords);
-  const [measures, setMeasures] = useState(initMeasures);
-
-  function handleSave() {
-    let len = CELLS;
-    while (len > 0 && !chords[len - 1] && !measures[len - 1]) len--;
-    onSave(chords.slice(0, Math.max(len, 1)), measures.slice(0, Math.max(len, 1)));
-  }
+  const ch = [...chords,   '', '', '', ''].slice(0, CELLS);
+  const me = [...measures, '', '', '', ''].slice(0, CELLS);
 
   function setChord(i: number, v: string) {
-    setChords(p => { const n = [...p]; n[i] = v.toUpperCase(); return n; });
+    const next = [...ch]; next[i] = v;
+    onChange(next, me);
   }
   function setMeasure(i: number, v: string) {
-    setMeasures(p => { const n = [...p]; n[i] = v; return n; });
+    const next = [...me]; next[i] = v;
+    onChange(ch, next);
+  }
+  function handleChord0Blur(e: React.FocusEvent<HTMLInputElement>) {
+    const parsed = parseSmartChord(e.target.value);
+    if (parsed) onChange(parsed, me);
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-40 flex items-end justify-center p-4"
-      onClick={onClose}>
-      <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl"
-        onClick={e => e.stopPropagation()}>
-        <h3 className="text-sm font-bold mb-3 text-gray-700">마디 편집</h3>
-        <div className="grid grid-cols-4 gap-1 mb-4">
-          {Array.from({ length: CELLS }).map((_, i) => (
-            <input key={`c${i}`}
-              value={chords[i]}
-              onChange={e => setChord(i, e.target.value)}
-              placeholder={['G', 'D', 'Em', 'C'][i]}
-              className="bg-indigo-50 text-indigo-700 font-bold text-sm px-1 py-1.5 rounded outline-none focus:bg-indigo-100 w-full text-center" />
-          ))}
-          {Array.from({ length: CELLS }).map((_, i) => (
-            <input key={`m${i}`}
-              value={measures[i]}
-              onChange={e => setMeasure(i, e.target.value)}
-              placeholder="가사"
-              className="bg-white text-gray-800 text-sm px-1 py-1.5 rounded border border-gray-100 outline-none focus:border-indigo-300 w-full" />
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleSave}
-            className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold">저장</button>
-          <button onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm text-gray-400">취소</button>
-        </div>
+    <div className="flex items-start gap-1 px-2 py-2 group bg-white">
+      <div
+        className="mt-1.5 cursor-grab active:cursor-grabbing touch-none select-none text-gray-300 text-base w-5 text-center shrink-0"
+        {...dragHandleProps}
+      >⠿</div>
+      <div className="flex-1 grid gap-px"
+        style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'auto auto' }}
+      >
+        {ch.map((c, mi) => (
+          <input
+            key={`c_${mi}`}
+            value={c}
+            onChange={e => setChord(mi, e.target.value.toUpperCase())}
+            onBlur={mi === 0 ? handleChord0Blur : undefined}
+            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
+            placeholder={['G', 'D', 'Em', 'Am'][mi]}
+            tabIndex={-1}
+            style={{ gridColumn: mi + 1, gridRow: 1 }}
+            className="bg-indigo-50 text-indigo-700 font-bold text-sm rounded-t px-1 py-1.5 outline-none focus:bg-indigo-100 placeholder:text-indigo-200 placeholder:font-normal w-full text-left"
+          />
+        ))}
+        {me.map((m, mi) => (
+          <input
+            key={`l_${mi}`}
+            value={m}
+            onChange={e => setMeasure(mi, e.target.value)}
+            onClick={e => (e.currentTarget as HTMLInputElement).focus()}
+            placeholder="가사"
+            tabIndex={-1}
+            style={{ gridColumn: mi + 1, gridRow: 2 }}
+            className="bg-white text-gray-800 text-sm border-t border-gray-100 rounded-b px-1 py-1.5 outline-none focus:bg-gray-50 placeholder:text-gray-200 w-full text-left"
+          />
+        ))}
       </div>
+      {canRemove && (
+        <button
+          onClick={onRemove}
+          className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center text-[10px] text-gray-300 hover:text-red-400 shrink-0"
+        >✕</button>
+      )}
     </div>
   );
 }
