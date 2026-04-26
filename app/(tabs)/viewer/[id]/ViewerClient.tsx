@@ -20,7 +20,9 @@ function getBeatIntervalMs(ts: TimeSig, bpm: number): number {
 }
 
 export default function ViewerClient({ markdown, songId }: Props) {
-  const [semitones, setSemitones]         = useState(0);
+  const [semitones, setSemitones]         = useState(() => {
+    try { return parseInt(localStorage.getItem(`hapjoo_semi_${songId}`) ?? '0', 10) || 0; } catch { return 0; }
+  });
   const [showNotes, setShowNotes]         = useState(true);
   const [headerCollapsed, setHeaderRaw]   = useState(false);
   const [showHelp, setShowHelp]           = useState(false);
@@ -70,6 +72,11 @@ export default function ViewerClient({ markdown, songId }: Props) {
     beatsPerBarRef.current  = getBeatsPerBar(timeSig);
     beatIntervalRef.current = getBeatIntervalMs(timeSig, bpm);
   }, [timeSig, bpm]);
+
+  // Persist semitones per song
+  useEffect(() => {
+    try { localStorage.setItem(`hapjoo_semi_${songId}`, String(semitones)); } catch {}
+  }, [semitones, songId]);
 
   // Save last viewed song for tab navigation
   useEffect(() => {
