@@ -323,7 +323,7 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
           {supabaseConfigured && !sessionLoading && !isAuthenticated && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed flex items-center justify-between gap-3">
               <span>
-                <strong>로그인 필요:</strong> 곡 {isEdit ? '편집' : '추가'}을 저장하려면 로그인하세요.
+                <strong>로그인 필요:</strong> 곡 {isEdit ? '편집을' : '추가를'} 저장하려면 로그인하세요.
               </span>
               <button
                 onClick={() => signInWithGoogle()}
