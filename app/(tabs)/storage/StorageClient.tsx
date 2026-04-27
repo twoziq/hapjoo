@@ -5,38 +5,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { CollectionWithCounts } from '@/types/collection';
 import { ROUTES } from '@/lib/constants';
-import { signInWithGoogle } from '@/lib/auth';
 import { createCollectionAction } from './actions';
 
 interface Props {
   initialCollections: CollectionWithCounts[];
-  loggedIn: boolean;
 }
 
-export default function StorageClient({ initialCollections, loggedIn }: Props) {
+export default function StorageClient({ initialCollections }: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [draft, setDraft] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  if (!loggedIn) {
-    return (
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center text-sm text-amber-800 leading-relaxed">
-        <p className="font-semibold mb-2">저장소는 로그인 후 사용할 수 있어요.</p>
-        <p className="text-xs text-amber-700 mb-4">
-          로그인하면 자동으로 &ldquo;개인&rdquo; 저장소가 만들어지고, 새 저장소를 만들어 친구와 함께 곡을
-          모을 수 있어요.
-        </p>
-        <button
-          onClick={() => signInWithGoogle()}
-          className="text-sm font-bold px-5 py-2 rounded-full bg-indigo-600 text-white"
-        >
-          Google로 로그인
-        </button>
-      </div>
-    );
-  }
 
   function submit() {
     setError(null);
