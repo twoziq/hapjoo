@@ -10,6 +10,9 @@ export const ROUTES = {
   chords: '/chords',
   tuner: '/tuner',
   settings: '/settings',
+  storage: '/storage',
+  storageDetail: (id: string) => `/storage/${id}`,
+  invite: (code: string) => `/invite/${code}`,
   viewer: (id: string) => `/viewer/${id}`,
   viewerEdit: (id: string) => `/viewer/${id}/edit`,
 } as const;

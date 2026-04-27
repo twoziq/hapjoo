@@ -7,6 +7,8 @@ import { safeSetItem } from '@/lib/storage';
 import { parseSheet } from '@/lib/sheet';
 import { FEMALE_KEY_OFFSET, transposeNote } from '@/lib/transpose';
 import SheetViewer from '@/components/SheetViewer';
+import SaveToCollectionModal from '@/components/SaveToCollectionModal';
+import { useSession } from '@/lib/hooks/useSession';
 import HelpModal from './HelpModal';
 import PlaybackControls from './PlaybackControls';
 import { useSemitones } from './hooks/useSemitones';
@@ -25,6 +27,9 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [bpmToast, setBpmToast] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [loginToast, setLoginToast] = useState(false);
+  const { isAuthenticated } = useSession();
 
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
 
@@ -128,6 +133,20 @@ export default function ViewerClient({ markdown, songId }: Props) {
               ?
             </button>
             <button
+              onClick={() => {
+                if (!isAuthenticated) {
+                  setLoginToast(true);
+                  setTimeout(() => setLoginToast(false), 2500);
+                  return;
+                }
+                setShowSaveModal(true);
+              }}
+              aria-label="저장소에 저장"
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
+            >
+              ⭐
+            </button>
+            <button
               onClick={() => router.push(ROUTES.viewerEdit(songId))}
               aria-label="악보 편집"
               className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
@@ -189,6 +208,16 @@ export default function ViewerClient({ markdown, songId }: Props) {
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
+      {showSaveModal && (
+        <SaveToCollectionModal songId={songId} onClose={() => setShowSaveModal(false)} />
+      )}
+
+      {loginToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          로그인하면 저장할 수 있어요
+        </div>
+      )}
     </div>
   );
 }

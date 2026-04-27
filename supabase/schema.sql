@@ -97,6 +97,12 @@ create policy "Authenticated insert rooms" on rooms for insert with check (auth.
 create policy "Authenticated update rooms" on rooms for update using (auth.role() = 'authenticated');
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Collections — full schema/RLS/triggers/RPC live in
+-- supabase/migrations/0002_collections.sql.
+-- Apply via Supabase SQL Editor for new projects.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Sample songs — seed for first-time setup.
 -- ─────────────────────────────────────────────────────────────────────────────
 insert into songs (id, title, artist, key, capo, bpm, content) values
