@@ -21,16 +21,19 @@ alter table songs add column if not exists notes  jsonb default '{}';
 
 alter table songs enable row level security;
 
--- Drop legacy public policies if present
-drop policy if exists "Public read songs"   on songs;
-drop policy if exists "Public insert songs" on songs;
-drop policy if exists "Public update songs" on songs;
-drop policy if exists "Public delete songs" on songs;
+-- Drop legacy policies if present (both legacy `Public *` and the earlier `Authenticated read`)
+drop policy if exists "Public read songs"        on songs;
+drop policy if exists "Public insert songs"      on songs;
+drop policy if exists "Public update songs"      on songs;
+drop policy if exists "Public delete songs"      on songs;
+drop policy if exists "Authenticated read songs" on songs;
 
-create policy "Authenticated read songs"
+-- Read is public so non-authenticated visitors can browse the song catalog.
+create policy "Public read songs"
   on songs for select
-  using (auth.role() = 'authenticated');
+  using (true);
 
+-- Writes still require an authenticated session.
 create policy "Authenticated insert songs"
   on songs for insert
   with check (auth.role() = 'authenticated');

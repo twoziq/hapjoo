@@ -7,6 +7,8 @@ import { GENDERS, MUSIC_KEYS, ROUTES } from '@/lib/constants';
 import { generateContent, parseCodeToData, parseSheet, slugify } from '@/lib/sheet';
 import { emptySection } from '@/lib/sheet/editor';
 import { supabaseConfigured } from '@/lib/supabase/client';
+import { useSession } from '@/lib/hooks/useSession';
+import { signInWithGoogle } from '@/lib/auth';
 import { createSongAction, updateSongAction } from '@/app/(tabs)/songs/actions';
 import { SectionEditor } from './SectionEditor';
 import { useEditorState } from './hooks/useEditorState';
@@ -30,6 +32,7 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
   const router = useRouter();
   const isEdit = !!editSongId;
   const data = initialData ?? DEFAULT_DATA;
+  const { isAuthenticated, loading: sessionLoading } = useSession();
 
   const [title, setTitle] = useState(data.title);
   const [artist, setArtist] = useState(data.artist);
@@ -110,6 +113,10 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
 
     if (!saveTitle.trim()) {
       setResult({ ok: false, msg: '제목을 입력해주세요.' });
+      return;
+    }
+    if (!isAuthenticated) {
+      setResult({ ok: false, msg: '곡 추가/편집은 로그인이 필요합니다.' });
       return;
     }
     setResult(null);
@@ -310,6 +317,20 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
           {!supabaseConfigured && !isEdit && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed">
               <strong>Supabase 미연결:</strong> 저장 시 악보 텍스트를 클립보드에 복사합니다.
+            </div>
+          )}
+
+          {supabaseConfigured && !sessionLoading && !isAuthenticated && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed flex items-center justify-between gap-3">
+              <span>
+                <strong>로그인 필요:</strong> 곡 {isEdit ? '편집' : '추가'}을 저장하려면 로그인하세요.
+              </span>
+              <button
+                onClick={() => signInWithGoogle()}
+                className="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-600 text-white"
+              >
+                로그인
+              </button>
             </div>
           )}
 

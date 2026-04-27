@@ -3,37 +3,42 @@
 import { useEffect, useState } from 'react';
 import { STORAGE_KEYS } from '@/lib/constants';
 import { safeGetJSON, safeSetJSON } from '@/lib/storage';
-import { getSongNotes } from '@/lib/db/notes';
-import { saveNotesAction } from '@/app/(tabs)/viewer/[id]/actions';
+import { getUserSong, upsertUserSong } from '@/lib/db/userSongs';
+import { useSession } from '@/lib/hooks/useSession';
 
 export function useNotes(songId: string) {
   const storageKey = STORAGE_KEYS.notes(songId);
+  const { session, isAuthenticated } = useSession();
   const [notes, setNotes] = useState<Record<string, string>>(() =>
     safeGetJSON<Record<string, string>>(storageKey, {}),
   );
 
+  // Hydrate from user_songs once we know the user is signed in.
   useEffect(() => {
+    if (!isAuthenticated) return;
     let cancelled = false;
-    getSongNotes(songId)
-      .then((shared) => {
-        if (cancelled) return;
-        if (shared && Object.keys(shared).length > 0) {
-          setNotes(shared);
-          safeSetJSON(storageKey, shared);
-        }
+    getUserSong(songId)
+      .then((row) => {
+        if (cancelled || !row?.notes) return;
+        setNotes(row.notes);
+        safeSetJSON(storageKey, row.notes);
       })
       .catch(() => {
-        // ignore — local notes still usable
+        // ignore — fall back to localStorage cache
       });
     return () => {
       cancelled = true;
     };
-  }, [songId, storageKey]);
+  }, [songId, storageKey, isAuthenticated, session?.user.id]);
 
   function persistNotes(next: Record<string, string>) {
     setNotes(next);
     safeSetJSON(storageKey, next);
-    void saveNotesAction(songId, next);
+    if (isAuthenticated) {
+      void upsertUserSong(songId, { notes: next }).catch(() => {
+        // best-effort sync; local copy already stored
+      });
+    }
   }
 
   function saveNote(key: string, text: string) {
