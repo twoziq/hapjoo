@@ -1,9 +1,12 @@
+import { unstable_cache } from 'next/cache';
 import type { DbSong } from '@/types/song';
 import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 
 export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm' | 'folder'>;
 
-export async function getSongs(): Promise<SongRow[]> {
+export const SONGS_TAG = 'songs';
+
+async function fetchSongs(): Promise<SongRow[]> {
   if (!supabaseConfigured) return [];
   const sb = getSupabase();
   const { data, error } = await sb
@@ -14,13 +17,23 @@ export async function getSongs(): Promise<SongRow[]> {
   return (data ?? []) as SongRow[];
 }
 
-export async function getSongContent(id: string): Promise<string | null> {
+export const getSongs = unstable_cache(fetchSongs, ['songs-list'], {
+  tags: [SONGS_TAG],
+  revalidate: 60,
+});
+
+async function fetchSongContent(id: string): Promise<string | null> {
   if (!supabaseConfigured) return null;
   const sb = getSupabase();
   const { data, error } = await sb.from('songs').select('content').eq('id', id).single();
   if (error) return null;
   return data?.content ?? null;
 }
+
+export const getSongContent = unstable_cache(fetchSongContent, ['song-content'], {
+  tags: [SONGS_TAG],
+  revalidate: 300,
+});
 
 export async function insertSong(song: Omit<DbSong, 'created_at'>): Promise<void> {
   const sb = getSupabase();

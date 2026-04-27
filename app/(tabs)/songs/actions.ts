@@ -1,9 +1,9 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import type { DbSong } from '@/types/song';
 import { getSession } from '@/lib/auth';
-import { deleteSong, insertSong, updateSong } from '@/lib/db/songs';
+import { deleteSong, insertSong, SONGS_TAG, updateSong } from '@/lib/db/songs';
 
 export type SongInput = Omit<DbSong, 'created_at'>;
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -19,6 +19,7 @@ export async function createSongAction(song: SongInput): Promise<ActionResult> {
   if (denied) return denied;
   try {
     await insertSong(song);
+    revalidateTag(SONGS_TAG, 'max');
     revalidatePath('/songs');
     return { ok: true };
   } catch (e) {
@@ -34,6 +35,7 @@ export async function updateSongAction(
   if (denied) return denied;
   try {
     await updateSong(id, patch);
+    revalidateTag(SONGS_TAG, 'max');
     revalidatePath('/songs');
     revalidatePath(`/viewer/${id}`);
     return { ok: true };
@@ -47,6 +49,7 @@ export async function deleteSongAction(id: string): Promise<ActionResult> {
   if (denied) return denied;
   try {
     await deleteSong(id);
+    revalidateTag(SONGS_TAG, 'max');
     revalidatePath('/songs');
     return { ok: true };
   } catch (e) {
