@@ -17,26 +17,29 @@ function parseMeta(content: string): { title: string; artist: string; key: strin
   return { title: get('title'), artist: get('artist'), key: get('key') };
 }
 
-// Scan data/songs/**/*.txt — no index.ts update needed when adding songs
-export function scanSongs(): DiscoveredSong[] {
+export function scanSeedSongs(): DiscoveredSong[] {
   const songs: DiscoveredSong[] = [];
   if (!fs.existsSync(SONGS_DIR)) return songs;
 
   let entries: fs.Dirent[];
-  try { entries = fs.readdirSync(SONGS_DIR, { withFileTypes: true }); }
-  catch (e) { console.error('[songLoader] readdir failed:', e); return songs; }
+  try {
+    entries = fs.readdirSync(SONGS_DIR, { withFileTypes: true });
+  } catch (e) {
+    console.error('[seed-songs] readdir failed:', e);
+    return songs;
+  }
 
-  // Root .txt files first
   for (const e of entries) {
     if (!e.isDirectory() && e.name.endsWith('.txt')) {
       try {
         const content = fs.readFileSync(path.join(SONGS_DIR, e.name), 'utf8');
         songs.push({ id: e.name.replace(/\.txt$/, ''), ...parseMeta(content), folder: null });
-      } catch (e) { console.error('[songLoader] read failed:', e); }
+      } catch (err) {
+        console.error('[seed-songs] read failed:', err);
+      }
     }
   }
 
-  // Subfolder .txt files
   for (const e of entries) {
     if (e.isDirectory()) {
       const folderPath = path.join(SONGS_DIR, e.name);
@@ -46,25 +49,35 @@ export function scanSongs(): DiscoveredSong[] {
           if (!sub.isDirectory() && sub.name.endsWith('.txt')) {
             try {
               const content = fs.readFileSync(path.join(folderPath, sub.name), 'utf8');
-              songs.push({ id: sub.name.replace(/\.txt$/, ''), ...parseMeta(content), folder: e.name });
-            } catch (e) { console.error('[songLoader] read failed:', e); }
+              songs.push({
+                id: sub.name.replace(/\.txt$/, ''),
+                ...parseMeta(content),
+                folder: e.name,
+              });
+            } catch (err) {
+              console.error('[seed-songs] read failed:', err);
+            }
           }
         }
-      } catch (e) { console.error('[songLoader] subfolder readdir failed:', e); }
+      } catch (err) {
+        console.error('[seed-songs] subfolder readdir failed:', err);
+      }
     }
   }
 
   return songs;
 }
 
-// Find song content by ID — searches root then all subfolders
-export function getSongContent(id: string): string | null {
-  // Security: reject path-traversal attempts
+export function readSeedSongContent(id: string): string | null {
   if (id.includes('/') || id.includes('\\') || id.includes('..')) return null;
 
   const rootPath = path.join(SONGS_DIR, `${id}.txt`);
   if (fs.existsSync(rootPath)) {
-    try { return fs.readFileSync(rootPath, 'utf8'); } catch {}
+    try {
+      return fs.readFileSync(rootPath, 'utf8');
+    } catch {
+      // continue to subfolder lookup
+    }
   }
 
   if (!fs.existsSync(SONGS_DIR)) return null;
@@ -74,11 +87,17 @@ export function getSongContent(id: string): string | null {
       if (e.isDirectory()) {
         const subPath = path.join(SONGS_DIR, e.name, `${id}.txt`);
         if (fs.existsSync(subPath)) {
-          try { return fs.readFileSync(subPath, 'utf8'); } catch {}
+          try {
+            return fs.readFileSync(subPath, 'utf8');
+          } catch {
+            // continue
+          }
         }
       }
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return null;
 }

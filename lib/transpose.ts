@@ -1,27 +1,23 @@
 const CHROMATIC_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
-const CHROMATIC_FLAT  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+const CHROMATIC_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
 export type ChordType = 'm' | '7' | 'm7' | 'maj7' | 'sus4' | 'sus2' | 'dim' | 'aug' | 'add9' | '';
 
 function getNoteIndex(note: string): number {
-  let idx = CHROMATIC_SHARP.indexOf(note as any);
-  if (idx !== -1) return idx;
-  return CHROMATIC_FLAT.indexOf(note as any);
+  const sharp = (CHROMATIC_SHARP as readonly string[]).indexOf(note);
+  if (sharp !== -1) return sharp;
+  return (CHROMATIC_FLAT as readonly string[]).indexOf(note);
 }
 
-export function parseChordName(chordName: string) {
+export function parseChordName(chordName: string): { root: string; type: ChordType } {
   const match = chordName.match(/^([A-G][b#]?)(.*)$/);
-  if (!match) return { root: chordName, type: '' as ChordType };
-  return { 
-    root: match[1], 
-    type: match[2] as ChordType 
-  };
+  if (!match) return { root: chordName, type: '' };
+  return { root: match[1], type: match[2] as ChordType };
 }
 
 export function transposeNote(note: string, semitones: number): string {
   const idx = getNoteIndex(note);
   if (idx === -1) return note;
-  
   const newIdx = (idx + semitones + 12) % 12;
   // 올라가면(#), 내려가면(b)
   return semitones >= 0 ? CHROMATIC_SHARP[newIdx] : CHROMATIC_FLAT[newIdx];
@@ -30,13 +26,16 @@ export function transposeNote(note: string, semitones: number): string {
 function transposeSingle(chordName: string, semitones: number): string {
   const { root, type } = parseChordName(chordName);
   const newRoot = transposeNote(root, semitones);
-  return newRoot + type;
+  return `${newRoot}${type}`;
 }
 
 export function transposeChord(chordName: string, semitones: number): string {
   if (semitones === 0) return chordName;
   if (chordName.includes('.')) {
-    return chordName.split('.').map(p => p ? transposeSingle(p, semitones) : '').join('.');
+    return chordName
+      .split('.')
+      .map((p) => (p ? transposeSingle(p, semitones) : ''))
+      .join('.');
   }
   return transposeSingle(chordName, semitones);
 }

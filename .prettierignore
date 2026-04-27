@@ -1,0 +1,10 @@
+.next
+node_modules
+dist
+out
+build
+coverage
+package-lock.json
+data/songs/
+docs/
+supabase/schema.sql

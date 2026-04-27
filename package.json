@@ -1,12 +1,17 @@
 {
-  "name": "out",
+  "name": "hapjoo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
@@ -16,9 +21,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^22.0.0",
     "@types/react": "19.2.14",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
-    "tailwindcss": "^4"
+    "prettier": "^3.4.2",
+    "tailwindcss": "^4",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.8"
   }
 }

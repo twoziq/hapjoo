@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 body {
   background: #ffffff;
@@ -6,17 +6,29 @@ body {
 }
 
 @keyframes beat-pulse {
-  0%   { transform: scale(1); }
-  35%  { transform: scale(1.55); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.55);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .beat-pulse {
   animation: beat-pulse 0.18s ease-out;
 }
 
 @keyframes slide-in-section {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .slide-in-section {
   animation: slide-in-section 0.28s ease-out;

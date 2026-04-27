@@ -1,16 +1,10 @@
+import { getSongContent } from '@/lib/db/songs';
 import ViewerClient from './ViewerClient';
-import { supabase } from '@/lib/supabase';
-import { getSongContent } from '@/lib/songLoader';
 
 export default async function ViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
   const id = decodeURIComponent(rawId);
-  let markdown = getSongContent(id) ?? '';
-
-  if (supabase) {
-    const { data } = await supabase.from('songs').select('content').eq('id', id).single();
-    if (data?.content) markdown = data.content;
-  }
+  const markdown = await getSongContent(id);
 
   if (!markdown) {
     return (
