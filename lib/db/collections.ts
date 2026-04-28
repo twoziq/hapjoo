@@ -42,19 +42,24 @@ export async function getCollection(id: string): Promise<Collection | null> {
 
 export async function createCollection(name: string, ownerId: string): Promise<Collection> {
   const sb = getSupabase();
-  const { data, error } = await sb
+  const id = crypto.randomUUID();
+  const { error: insertErr } = await sb
     .from('collections')
-    .insert({ name, owner_id: ownerId, is_personal: false })
-    .select('id, name, owner_id, is_personal, created_at')
-    .single();
-  if (error || !data) throw new Error(error?.message ?? 'create failed');
-  // RLS doesn't auto-add owner as member; do it explicitly.
-  await sb.from('collection_members').insert({
-    collection_id: (data as Collection).id,
+    .insert({ id, name, owner_id: ownerId, is_personal: false });
+  if (insertErr) throw new Error(insertErr.message);
+  const { error: memberErr } = await sb.from('collection_members').insert({
+    collection_id: id,
     user_id: ownerId,
     role: 'owner',
   });
-  return data as Collection;
+  if (memberErr) throw new Error(memberErr.message);
+  return {
+    id,
+    name,
+    owner_id: ownerId,
+    is_personal: false,
+    created_at: new Date().toISOString(),
+  };
 }
 
 export async function renameCollection(id: string, name: string): Promise<void> {
