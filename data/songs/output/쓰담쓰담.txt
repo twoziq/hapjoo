@@ -1,0 +1,21 @@
+{title: 쓰담쓰담}
+{artist: 로꼬, 유주 (GFRIEND)}
+{key: C}
+{capo: 0}
+{bpm: 100}
+
+[Intro]
+[C] | [Dm7.G.] | [F] | [Dm7] |
+[C] | [Dm7] | [G] | [C] |
+[C] | [Dm7] | [G7] | [C.G.Am.G/B.] |
+[C] | [Em7] | [Dm7] | [C] |
+
+[Verse 1]
+[Dm7]어디 [G7]있어 | [CM7]지금 [A]어디? |
+[Dm7]나의 [G7]곁에 | [CM7]딱 와있 [Cdim.Edim.]어 |
+[Dm7]들리는 [G7]목소리 | [CM7]난 다 [A]잊었어요 |
+[Dm7]TV [G7]보는 [CM7]중 [A]식사 중이던 |
+[Dm7]운전 [G7]중이던 | [CM7]뭐 상관없 [G/C.F/C.Em/B.Dm/A]어 넌 내게로 와 |
+
+[Pre-Chorus]
+[C]꽉 안고 [Dm7.G.]있지 | [F]날 놓지 [Dm7]않

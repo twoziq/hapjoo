@@ -1,0 +1,20 @@
+{title: 별 보러 가자}
+{artist: Standing Egg}
+{key: C}
+{capo: 0}
+{bpm: 100}
+
+[Verse 1]
+[C]밤바람이 [CM7/B]조금씩 [C7/A#]불어 [F/A]오면 | [F]네 [C/E]생각이 [D7]그렇게 [G7sus]나더라 |
+[C]긴 하루를 [CM7/B]보내고 [C7/A#]집에 [F/A]돌아가는 길에 | [Fm]네 [C/G]생각이 [D7]문득 [G7sus]나더라 [C]|
+[Gm7]어디야 [Fm7]지금 [E7sus4]뭐해 |
+
+[Chorus 1]
+[A]나랑 [E/G#]별 보러 [Em/G]가지 [F#m7b5]않을래 | [Bm]너희 [Bm(M7)]집 앞으로 잠깐 [D/A]나올래 [Gmaj7b5] | [C#7] |
+[F#m]가볍게 [F#m(M7)]걸어 [A/E]나올 때 [Dmaj7]두 손은 [C#7]비어있지만 | [C#m7]왠지 [F#7b13]모르게 [Bm]설레 [E7sus4] |
+
+[Verse 2]
+[A]오랜만에 [E/G#]둘이 [Em/G]걷는 이 [F#m7b5]길 | [Bm]그냥 [Bm(M7)]아무 말 없이 걷는 [D/A]것만으로도 좋아서 [Gmaj7b5] | [C#7] |
+[F#m]멍하니 [F#m(M7)]밤하늘만 [A/E]쳐다봐 | [Bm7]아마 [E7sus4]지금 이 순간이 [A]가장 빛나는 별 일거[G7sus]야 |
+
+[Pre-Chorus

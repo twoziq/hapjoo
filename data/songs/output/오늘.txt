@@ -1,0 +1,44 @@
+{title: 오늘}
+{artist: 어반자카파 (Urban Zakapa)}
+{key: E}
+{capo: 0}
+{bpm: 100}
+
+[Verse 1]
+[E.G#.]늘 맘을 | [C#m.F#.]졸이며 | [Asus2.B7.]하루하 | [E]루를 살았죠 |
+[E.G#.]이젠 정 | [C#m.F#.]말 지쳤 | [Asus2.B7.]어요 | [E] |
+
+[Chorus 1]
+[E.G#.]나만 태 | [C#m.F#.]어나게 | [Asus2.B7.]힘든 건 | [E]가요 |
+
+[Pre-Chorus 1]
+[E.G#.]왜 외로 | [C#m.F#.]움 나를 | [Asus2.B7.]괴롭히 | [E]고 |
+
+[Bridge]
+[C#m.B.]아무것도 | [A.E.]함께 없는 | [C#m.B.]하루인 | [A.E.G#m.]데 |
+[C#m.B.]나는 왜 이 | [A.E.]렇게 외로 | [F#m]운 걸까 | [Am.B.] |
+[C#m.B.]아쉬운 날 | [A.E.]들이 찾아 | [C#m.B.]다가오 | [A.E.G#m.]네 |
+[C#m.B.]괜찮은 밤 | [A.E.]이 맘에 | [F#m]닿아 | [Am.B.] |
+
+[Chorus 2]
+[E.G#.]나만 태 | [C#m.F#.]어나게 | [Asus2.B7.]힘든 건 | [E]가요 |
+
+[Pre-Chorus 2]
+[E.G#.]왜 외로 | [C#m.F#.]움 나를 | [Asus2.B7.]괴롭히 | [E]고 |
+
+[Interlude]
+[E.G#.] | [C#m.F#.] | [Asus2.B7.] | [E] |
+[E.G#.] | [C#m.F#.] | [Asus2.B7.] | [E] |
+
+[Verse 2]
+[E.G#.]이런 날 | [C#m.F#.]들 또 보 | [Asus2.B7.]내야 하 | [E]니 |
+[E.G#.]오늘도 | [C#m.F#.]슬픔에 | [Asus2.B7.]잠겨 내 맘 | [E]은 지쳐있나 봐 |
+
+[Chorus 3]
+[E.G#.]나만 태 | [C#m.F#.]어나게 | [Asus2.B7.]힘든 건 | [E]가요 |
+
+[Pre-Chorus 3]
+[E.G#.]왜 외로 | [C#m.F#.]움 나를 | [Asus2.B7.]괴롭히 | [E]고 |
+
+[Outro]
+[E.G#.]왜 외로 | [C#m.F#m.]움 나를 | [Asus2.B7.]괴롭히 | [E]고 ||

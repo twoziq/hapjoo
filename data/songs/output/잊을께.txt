@@ -1,0 +1,21 @@
+{title: 잊을께}
+{artist: YB}
+{key: G}
+{capo: 0}
+{bpm: 100}
+
+[Verse 1]
+[G.F.]아침에 [D/F#]눈을 [C/E]떴을 때 | [Em.Dm.]문득 [G.F.]너를 |
+[D/F#]걷다가 [C/E]멈춰 선 [Em.Dm.]채로 | [G.F.]다시 [G.F.]너를 |
+
+[Verse 2]
+[Am.Gm.]지금은 [C/G]내 [Bb/F]곁에 없는 | [D/F#]너를 [C/E]그리워하며 |
+[G]바보처럼 | [F] |
+
+[Pre-Chorus]
+[G.F.]나보다 [D/F#]더 [C/E]행복하기를 | [Em.Dm.]바래 |
+[G.F.]내 [D/F#]생각 [C/E]하지 [Em.Dm.]않기를 | [G.F.]바래 |
+
+[Chorus]
+[Am.Gm.]더 [C/G]좋은 [Bb/F]사람 만나길 | [D/F#]바래 [C/E]다시는 |
+[Em.Dm.]내게 [G.F.]올 수 없게 | [C.Bb.] | [

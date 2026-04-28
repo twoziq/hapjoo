@@ -1,0 +1,22 @@
+{title: 벌써 일년}
+{artist: 브라운 아이드 소울}
+{key: Em}
+{capo: 0}
+{bpm: 100}
+
+[Verse 1]
+[Em7]처음이라 | [Bm]그래 | [C/E]며칠 뒤엔 | [D#dim]괜찮아져 |
+[G]그 생각만으로 | [G/F#]벌써 일년이 ||
+[Em]너와 만든 | [Bm/D]기념일마다 | [CM7]슬픔은 | [Bm]나를 찾아와 |
+
+[Verse 2]
+[Am]처음 사랑 | [D]고백하며 | [Bm]설레던 | [Em]수줍음과 |
+[Am]우리 처음 | [D]만난 날 | [G]지나가고 | [G/F#] |
+[Em]너의 생일에 | [Bm/D]눈물의 | [CM7]케잌 촛불 | [Bm]켜서 축하해 |
+
+[Bridge]
+[Em]I believe in | [Bm]you | [Am]I believe in | [D]your mind |
+[G]벌써 일년이 지났지만 ||
+
+[Chorus]
+[Em]일년 뒤에도 | [Bm]그 일년 뒤에도 | [C]널 | [D]기다려 |

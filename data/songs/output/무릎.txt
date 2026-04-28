@@ -1,0 +1,20 @@
+{title: 무릎}
+{artist: 이적}
+{key: C}
+{capo: 0}
+{bpm: 100}
+
+[Intro]
+[C9] | [G/B] | [A7sus4] | [Am7/G] |
+[F] | [C/E] | [Dm7] | [F/G.G7.] |
+
+[Verse 1]
+[C9]꿈을 [G/B]꾸던 [A7sus4]두 발을 [Am7/G]담그던 | [F]다시 [C/E]너에게 [Dm7]내리던 | [F/G.G7.] |
+[C9]나 그대 [G/B]지친 [G/Bb]발 맡겨 [A7]게으른 | [Dm7]모든 [G]걸 맡겨 | [G] | [G] |
+
+[Pre-Chorus]
+[F]나 조그만 [E7]것 같아 [Am]이 정도면 [A7]오래 | [Dm7] | [F/G] | [C] | [G7] |
+[F]그만둘까? [G/F]지쳐서 [Em7]못 걸어 [A7]가겠어 | [Dm7] | [F/G] | [F] | [F] |
+
+[Chorus]
+[C9]

@@ -1,0 +1,13 @@
+{title: 어지러웠던}
+{artist: 정엽}
+{key: D}
+{capo: 0}
+{bpm: 100}
+
+[Bridge]
+[Em7.A/C#]어지러웠던 하루 | [D.Bm7]하루가 먹구름 | [C#m7b5.F#7]처럼 내 앞을 | [Bm7.Am7.D7]가로막아도 |
+[Em7.A/C#]너의 눈빛이 [D.D/F#.G]마치 나침반처럼 | [Em7.Asus]내 갈 길 알려주고 [Dsus]있으니 |
+[Em7.A/C#] | [D.D/F#.G] | [Em7.Asus] | [Dsus] |
+
+[Verse 1]
+[Em7.A/C#]아직 이 황량한 | [D.G/B]세상 속에 너는 | [C#m7b5.F#7]내 곁에 있어주니 | [Bm7.A/C#.D]까 |
