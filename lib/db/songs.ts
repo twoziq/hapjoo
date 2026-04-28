@@ -30,6 +30,27 @@ export const getSongsPageCached = unstable_cache(fetchSongsPage, ['songs-page'],
   revalidate: 60,
 });
 
+export async function searchSongsPage(
+  query: string,
+  offset: number,
+  limit: number,
+): Promise<SongsPage> {
+  if (!supabaseConfigured) return { rows: [], hasMore: false };
+  const sanitized = query.trim().replace(/[%_,()*]/g, '');
+  if (!sanitized) return { rows: [], hasMore: false };
+  const sb = getSupabase();
+  const pat = `%${sanitized}%`;
+  const { data, error } = await sb
+    .from('songs')
+    .select('id, title, artist, key, capo, bpm, folder')
+    .or(`title.ilike.${pat},artist.ilike.${pat}`)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit);
+  if (error) throw new Error(`searchSongsPage: ${error.message}`);
+  const all = (data ?? []) as SongRow[];
+  return { rows: all.slice(0, limit), hasMore: all.length > limit };
+}
+
 async function fetchSongContent(id: string): Promise<string | null> {
   if (!supabaseConfigured) return null;
   const sb = getSupabase();

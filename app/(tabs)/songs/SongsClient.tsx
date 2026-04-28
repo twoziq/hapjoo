@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SongItem } from '@/types/song';
+import type { SongRow } from '@/lib/db/songs';
 import { ROUTES } from '@/lib/constants';
-import { fetchSongsPage } from '@/lib/db/songs';
+import { fetchSongsPage, searchSongsPage } from '@/lib/db/songs';
 
 export type { SongItem } from '@/types/song';
 
@@ -14,14 +15,64 @@ interface Props {
   pageSize: number;
 }
 
+function rowToItem(s: SongRow): SongItem {
+  return {
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    key: s.key,
+    folder: s.folder ?? null,
+  };
+}
+
 export default function SongsClient({ initialItems, initialHasMore, pageSize }: Props) {
-  const [items, setItems] = useState<SongItem[]>(initialItems);
-  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  // Browse-mode state (when search is empty).
+  const [browseItems, setBrowseItems] = useState<SongItem[]>(initialItems);
+  const [browseHasMore, setBrowseHasMore] = useState<boolean>(initialHasMore);
+
+  // Search-mode state (when activeQuery is non-empty).
+  const [searchItems, setSearchItems] = useState<SongItem[]>([]);
+  const [searchHasMore, setSearchHasMore] = useState<boolean>(false);
+
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // Debounce search input.
+  useEffect(() => {
+    const t = setTimeout(() => setActiveQuery(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Fetch first page of search results when activeQuery changes.
+  useEffect(() => {
+    if (activeQuery === '') return;
+    let cancelled = false;
+    searchSongsPage(activeQuery, 0, pageSize)
+      .then(({ rows, hasMore: more }) => {
+        if (cancelled) return;
+        setSearchItems(rows.map(rowToItem));
+        setSearchHasMore(more);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSearchItems([]);
+        setSearchHasMore(false);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeQuery, pageSize]);
+
+  const isSearching = activeQuery.length > 0;
+  const items = isSearching ? searchItems : browseItems;
+  const hasMore = isSearching ? searchHasMore : browseHasMore;
+
+  // Infinite scroll: branch on whether searching.
   useEffect(() => {
     if (!hasMore) return;
     const el = sentinelRef.current;
@@ -30,28 +81,32 @@ export default function SongsClient({ initialItems, initialHasMore, pageSize }: 
       (entries) => {
         if (!entries[0].isIntersecting || loading) return;
         setLoading(true);
-        fetchSongsPage(items.length, pageSize)
+        const offset = items.length;
+        const promise = isSearching
+          ? searchSongsPage(activeQuery, offset, pageSize)
+          : fetchSongsPage(offset, pageSize);
+        promise
           .then(({ rows, hasMore: more }) => {
-            setItems((prev) => [
-              ...prev,
-              ...rows.map((s) => ({
-                id: s.id,
-                title: s.title,
-                artist: s.artist,
-                key: s.key,
-                folder: s.folder ?? null,
-              })),
-            ]);
-            setHasMore(more);
+            const newItems = rows.map(rowToItem);
+            if (isSearching) {
+              setSearchItems((prev) => [...prev, ...newItems]);
+              setSearchHasMore(more);
+            } else {
+              setBrowseItems((prev) => [...prev, ...newItems]);
+              setBrowseHasMore(more);
+            }
           })
-          .catch(() => setHasMore(false))
+          .catch(() => {
+            if (isSearching) setSearchHasMore(false);
+            else setBrowseHasMore(false);
+          })
           .finally(() => setLoading(false));
       },
       { rootMargin: '300px' },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loading, items.length, pageSize]);
+  }, [hasMore, loading, items.length, pageSize, isSearching, activeQuery]);
 
   const groups = useMemo(() => {
     const map = new Map<string | null, SongItem[]>();
@@ -77,8 +132,7 @@ export default function SongsClient({ initialItems, initialHasMore, pageSize }: 
     });
   }
 
-  const filtered = (songs: SongItem[]) =>
-    query.trim() ? songs.filter((s) => s.title.includes(query) || s.artist.includes(query)) : songs;
+  const showEmptyState = isSearching && !loading && items.length === 0;
 
   return (
     <>
@@ -90,9 +144,11 @@ export default function SongsClient({ initialItems, initialHasMore, pageSize }: 
         className="w-full mb-4 px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 bg-gray-50"
       />
 
+      {showEmptyState && (
+        <p className="text-center text-xs text-gray-400 py-8">검색 결과가 없어요.</p>
+      )}
+
       {groups.map(({ folder, songs }) => {
-        const list = filtered(songs);
-        if (!list.length) return null;
         const isOpen = !folder || !collapsed.has(folder);
 
         return (
@@ -113,7 +169,7 @@ export default function SongsClient({ initialItems, initialHasMore, pageSize }: 
 
             {isOpen && (
               <ul className="flex flex-col gap-2">
-                {list.map((song) => (
+                {songs.map((song) => (
                   <li key={song.id}>
                     <Link
                       href={ROUTES.viewer(song.id)}
