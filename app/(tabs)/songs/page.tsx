@@ -1,32 +1,19 @@
 import Link from 'next/link';
 import type { SongItem } from '@/types/song';
 import { ROUTES } from '@/lib/constants';
-import { getSongs } from '@/lib/db/songs';
+import { SONGS_PAGE_SIZE, getSongsPageCached } from '@/lib/db/songs';
 import SongsClient from './SongsClient';
 
 export default async function SongsPage() {
-  const dbSongs = await getSongs();
+  const { rows, hasMore } = await getSongsPageCached(0, SONGS_PAGE_SIZE);
 
-  const items: SongItem[] = dbSongs.map((s) => ({
+  const initialItems: SongItem[] = rows.map((s) => ({
     id: s.id,
     title: s.title,
     artist: s.artist,
     key: s.key,
     folder: s.folder ?? null,
   }));
-
-  const map = new Map<string | null, SongItem[]>();
-  for (const s of items) {
-    const f = s.folder ?? null;
-    if (!map.has(f)) map.set(f, []);
-    map.get(f)!.push(s);
-  }
-
-  const groups: { folder: string | null; songs: SongItem[] }[] = [];
-  if (map.has(null)) groups.push({ folder: null, songs: map.get(null)! });
-  map.forEach((songs, folder) => {
-    if (folder !== null) groups.push({ folder, songs });
-  });
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -42,7 +29,11 @@ export default async function SongsPage() {
           </Link>
         </div>
       </div>
-      <SongsClient groups={groups} />
+      <SongsClient
+        initialItems={initialItems}
+        initialHasMore={hasMore}
+        pageSize={SONGS_PAGE_SIZE}
+      />
     </div>
   );
 }

@@ -5,19 +5,27 @@ import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm' | 'folder'>;
 
 export const SONGS_TAG = 'songs';
+export const SONGS_PAGE_SIZE = 50;
 
-async function fetchSongs(): Promise<SongRow[]> {
-  if (!supabaseConfigured) return [];
+export interface SongsPage {
+  rows: SongRow[];
+  hasMore: boolean;
+}
+
+export async function fetchSongsPage(offset: number, limit: number): Promise<SongsPage> {
+  if (!supabaseConfigured) return { rows: [], hasMore: false };
   const sb = getSupabase();
   const { data, error } = await sb
     .from('songs')
     .select('id, title, artist, key, capo, bpm, folder')
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`getSongs: ${error.message}`);
-  return (data ?? []) as SongRow[];
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit);
+  if (error) throw new Error(`fetchSongsPage: ${error.message}`);
+  const all = (data ?? []) as SongRow[];
+  return { rows: all.slice(0, limit), hasMore: all.length > limit };
 }
 
-export const getSongs = unstable_cache(fetchSongs, ['songs-list'], {
+export const getSongsPageCached = unstable_cache(fetchSongsPage, ['songs-page'], {
   tags: [SONGS_TAG],
   revalidate: 60,
 });

@@ -1,19 +1,72 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SongItem } from '@/types/song';
 import { ROUTES } from '@/lib/constants';
+import { fetchSongsPage } from '@/lib/db/songs';
 
 export type { SongItem } from '@/types/song';
 
 interface Props {
-  groups: { folder: string | null; songs: SongItem[] }[];
+  initialItems: SongItem[];
+  initialHasMore: boolean;
+  pageSize: number;
 }
 
-export default function SongsClient({ groups }: Props) {
+export default function SongsClient({ initialItems, initialHasMore, pageSize }: Props) {
+  const [items, setItems] = useState<SongItem[]>(initialItems);
+  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting || loading) return;
+        setLoading(true);
+        fetchSongsPage(items.length, pageSize)
+          .then(({ rows, hasMore: more }) => {
+            setItems((prev) => [
+              ...prev,
+              ...rows.map((s) => ({
+                id: s.id,
+                title: s.title,
+                artist: s.artist,
+                key: s.key,
+                folder: s.folder ?? null,
+              })),
+            ]);
+            setHasMore(more);
+          })
+          .catch(() => setHasMore(false))
+          .finally(() => setLoading(false));
+      },
+      { rootMargin: '300px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, items.length, pageSize]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string | null, SongItem[]>();
+    for (const s of items) {
+      const f = s.folder ?? null;
+      if (!map.has(f)) map.set(f, []);
+      map.get(f)!.push(s);
+    }
+    const out: { folder: string | null; songs: SongItem[] }[] = [];
+    if (map.has(null)) out.push({ folder: null, songs: map.get(null)! });
+    map.forEach((songs, folder) => {
+      if (folder !== null) out.push({ folder, songs });
+    });
+    return out;
+  }, [items]);
 
   function toggleFolder(folder: string) {
     setCollapsed((prev) => {
@@ -82,6 +135,12 @@ export default function SongsClient({ groups }: Props) {
           </div>
         );
       })}
+
+      {hasMore && (
+        <div ref={sentinelRef} className="py-4 text-center text-xs text-gray-400">
+          {loading ? '불러오는 중…' : ''}
+        </div>
+      )}
     </>
   );
 }
