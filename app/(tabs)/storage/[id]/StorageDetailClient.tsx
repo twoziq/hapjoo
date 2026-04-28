@@ -1,15 +1,18 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, notFound } from 'next/navigation';
 import type {
   Collection,
+  CollectionMember,
   CollectionMemberWithProfile,
-  CollectionRole,
 } from '@/types/collection';
 import type { SongRow } from '@/lib/db/songs';
 import { ROUTES } from '@/lib/constants';
+import { getCollection, listCollectionSongs } from '@/lib/db/collections';
+import { getMyMembership, listMembers } from '@/lib/db/collectionMembers';
+import { useSession } from '@/lib/hooks/useSession';
 import {
   deleteCollectionAction,
   leaveCollectionAction,
@@ -19,30 +22,96 @@ import {
 import InviteModal from './InviteModal';
 
 interface Props {
+  collectionId: string;
+}
+
+interface DetailData {
   collection: Collection;
   songs: SongRow[];
   members: CollectionMemberWithProfile[];
-  currentUserId: string;
-  myRole: CollectionRole;
+  membership: CollectionMember;
 }
 
-export default function StorageDetailClient({
-  collection,
-  songs,
-  members,
-  currentUserId,
-  myRole,
-}: Props) {
+export default function StorageDetailClient({ collectionId }: Props) {
   const router = useRouter();
+  const { session, loading: sessionLoading, isAuthenticated } = useSession();
+  const [data, setData] = useState<DetailData | null>(null);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'not_found' | 'not_member'>(
+    'loading',
+  );
   const [editingName, setEditingName] = useState(false);
-  const [name, setName] = useState(collection.name);
+  const [name, setName] = useState('');
   const [showInvite, setShowInvite] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const isOwner = myRole === 'owner';
+  useEffect(() => {
+    if (sessionLoading || !session) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const collection = await getCollection(collectionId);
+        if (!collection) {
+          if (!cancelled) setLoadState('not_found');
+          return;
+        }
+        const [songs, members, membership] = await Promise.all([
+          listCollectionSongs(collectionId),
+          listMembers(collectionId),
+          getMyMembership(collectionId, session.user.id),
+        ]);
+        if (cancelled) return;
+        if (!membership) {
+          setLoadState('not_member');
+          return;
+        }
+        setData({ collection, songs, members, membership });
+        setName(collection.name);
+        setLoadState('ready');
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '불러오기 실패');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionId, session, sessionLoading]);
+
+  function refetch() {
+    if (!session) return;
+    (async () => {
+      const [members] = await Promise.all([listMembers(collectionId)]);
+      setData((prev) => (prev ? { ...prev, members } : prev));
+    })();
+  }
+
+  if (sessionLoading) {
+    return <div className="p-6 text-center text-sm text-gray-400">불러오는 중…</div>;
+  }
+  if (!isAuthenticated || !session) {
+    return (
+      <div className="p-6 text-center text-sm text-gray-400">
+        저장소는 로그인 후 사용할 수 있어요.
+      </div>
+    );
+  }
+  if (loadState === 'not_found') {
+    notFound();
+  }
+  if (loadState === 'not_member') {
+    return (
+      <div className="p-6 text-center text-sm text-gray-400">이 저장소의 멤버가 아니에요.</div>
+    );
+  }
+  if (loadState === 'loading' || !data) {
+    return <div className="p-6 text-center text-sm text-gray-400">불러오는 중…</div>;
+  }
+
+  const { collection, songs, members, membership } = data;
+  const currentUserId = session.user.id;
+  const isOwner = membership.role === 'owner';
 
   function commitRename() {
     if (name.trim() === collection.name) {
@@ -53,6 +122,7 @@ export default function StorageDetailClient({
       const r = await renameCollectionAction(collection.id, name);
       if (r.ok) {
         setEditingName(false);
+        setData((prev) => (prev ? { ...prev, collection: { ...prev.collection, name } } : prev));
       } else {
         setError(r.error);
         setName(collection.name);
@@ -92,7 +162,7 @@ export default function StorageDetailClient({
     startTransition(async () => {
       const r = await removeMemberAction(collection.id, userId);
       if (!r.ok) setError(r.error);
-      else router.refresh();
+      else refetch();
     });
   }
 

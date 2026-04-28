@@ -3,7 +3,8 @@ import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 
 export type { Session };
 
-const oauthRedirect = () => (typeof window !== 'undefined' ? window.location.origin : '');
+const oauthRedirect = () =>
+  typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '';
 
 export async function signInWithGoogle(): Promise<void> {
   if (!supabaseConfigured) return;

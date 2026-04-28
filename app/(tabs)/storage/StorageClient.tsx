@@ -1,22 +1,37 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { CollectionWithCounts } from '@/types/collection';
 import { ROUTES } from '@/lib/constants';
+import { listMyCollections } from '@/lib/db/collections';
+import { useSession } from '@/lib/hooks/useSession';
 import { createCollectionAction } from './actions';
 
-interface Props {
-  initialCollections: CollectionWithCounts[];
-}
-
-export default function StorageClient({ initialCollections }: Props) {
+export default function StorageClient() {
   const router = useRouter();
+  const { isAuthenticated, loading: sessionLoading } = useSession();
+  const [collections, setCollections] = useState<CollectionWithCounts[] | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [draft, setDraft] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sessionLoading || !isAuthenticated) return;
+    let cancelled = false;
+    listMyCollections()
+      .then((cols) => {
+        if (!cancelled) setCollections(cols);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : '불러오기 실패');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, sessionLoading]);
 
   function submit() {
     setError(null);
@@ -32,6 +47,28 @@ export default function StorageClient({ initialCollections }: Props) {
     });
   }
 
+  if (sessionLoading) {
+    return <p className="text-center text-sm text-gray-400 py-8">불러오는 중…</p>;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="text-center text-sm text-gray-400 py-8 space-y-3">
+        <p>저장소는 로그인 후 사용할 수 있어요.</p>
+        <Link
+          href={ROUTES.settings}
+          className="inline-block text-xs font-bold px-4 py-2 rounded-full bg-indigo-600 text-white"
+        >
+          로그인하러 가기
+        </Link>
+      </div>
+    );
+  }
+
+  if (collections === null) {
+    return <p className="text-center text-sm text-gray-400 py-8">컬렉션 불러오는 중…</p>;
+  }
+
   return (
     <>
       <button
@@ -42,7 +79,7 @@ export default function StorageClient({ initialCollections }: Props) {
       </button>
 
       <ul className="flex flex-col gap-2">
-        {initialCollections.map((c) => (
+        {collections.map((c) => (
           <li key={c.id}>
             <Link
               href={ROUTES.storageDetail(c.id)}
@@ -62,7 +99,7 @@ export default function StorageClient({ initialCollections }: Props) {
             </Link>
           </li>
         ))}
-        {initialCollections.length === 0 && (
+        {collections.length === 0 && (
           <li className="text-center text-xs text-gray-400 py-8">
             저장소가 아직 없어요. 위에서 만들어보세요.
           </li>
