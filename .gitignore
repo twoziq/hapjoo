@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase SQL은 git 관리 안 함 (Dashboard SQL Editor에서 직접 실행)
+supabase/migrations/
+supabase/schema.sql
