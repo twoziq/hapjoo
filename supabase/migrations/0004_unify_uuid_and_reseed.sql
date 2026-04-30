@@ -5,19 +5,33 @@
 
 begin;
 
--- 1) 기존 songs 데이터 + cascade로 user_songs/collection_songs/rooms/song_change_requests 비우기
+-- 1) 기존 songs 데이터 + cascade로 의존 테이블(user_songs/collection_songs/rooms/song_change_requests) 비우기
 truncate table songs cascade;
 
--- 2) FK 컬럼들 text → uuid 타입 변경 (truncate 후라 cast 필요 없음)
+-- 2) FK constraint 먼저 drop (타입 변경 중 type mismatch 회피)
+alter table user_songs           drop constraint if exists user_songs_song_id_fkey;
+alter table collection_songs     drop constraint if exists collection_songs_song_id_fkey;
+alter table rooms                drop constraint if exists rooms_song_id_fkey;
+alter table song_change_requests drop constraint if exists song_change_requests_song_id_fkey;
+
+-- 3) 모든 관련 컬럼 text → uuid (테이블 비어있어 cast 트리거 없음)
+alter table songs alter column id drop default;
+alter table songs alter column id type uuid using id::uuid;
+alter table songs alter column id set default gen_random_uuid();
 alter table user_songs           alter column song_id type uuid using song_id::uuid;
 alter table collection_songs     alter column song_id type uuid using song_id::uuid;
 alter table rooms                alter column song_id type uuid using song_id::uuid;
 alter table song_change_requests alter column song_id type uuid using song_id::uuid;
 
--- 3) songs.id text → uuid + default gen_random_uuid()
-alter table songs alter column id drop default;
-alter table songs alter column id type uuid using id::uuid;
-alter table songs alter column id set default gen_random_uuid();
+-- 3b) FK constraint 재생성 (원래 on delete cascade 정책 유지; rooms는 cascade 없었음)
+alter table user_songs add constraint user_songs_song_id_fkey
+  foreign key (song_id) references songs(id) on delete cascade;
+alter table collection_songs add constraint collection_songs_song_id_fkey
+  foreign key (song_id) references songs(id) on delete cascade;
+alter table rooms add constraint rooms_song_id_fkey
+  foreign key (song_id) references songs(id);
+alter table song_change_requests add constraint song_change_requests_song_id_fkey
+  foreign key (song_id) references songs(id) on delete cascade;
 
 -- 4) song_change_requests: proposed_id 제거 + 일관성 제약 갱신
 alter table song_change_requests drop constraint if exists song_change_requests_kind_consistency;
