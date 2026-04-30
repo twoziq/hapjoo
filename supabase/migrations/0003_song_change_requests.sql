@@ -58,10 +58,8 @@ create policy "owner deletes collection songs"
 create table if not exists song_change_requests (
   id            uuid primary key default gen_random_uuid(),
   kind          text not null check (kind in ('create', 'edit')),
-  -- edit이면 기존 곡 id, create면 null
-  song_id       text references songs(id) on delete cascade,
-  -- create면 새 곡의 제안 id (slugify), edit이면 null
-  proposed_id   text,
+  -- edit이면 기존 곡 id, create면 null (승인 시 새 uuid 자동 발급)
+  song_id       uuid references songs(id) on delete cascade,
   requester_id  uuid not null references auth.users(id) on delete cascade,
   status        text not null default 'pending'
                 check (status in ('pending', 'approved', 'rejected')),
@@ -77,10 +75,9 @@ create table if not exists song_change_requests (
   reviewed_at   timestamptz,
   reviewed_by   uuid references auth.users(id) on delete set null,
   created_at    timestamptz not null default now(),
-  -- kind에 따라 한 컬럼만 채워짐
   constraint song_change_requests_kind_consistency check (
-    (kind = 'create' and song_id is null and proposed_id is not null) or
-    (kind = 'edit'   and song_id is not null and proposed_id is null)
+    (kind = 'create' and song_id is null) or
+    (kind = 'edit'   and song_id is not null)
   )
 );
 
@@ -113,20 +110,20 @@ create policy "admin deletes"
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 승인/거절 RPC
 -- ─────────────────────────────────────────────────────────────────────────────
-create or replace function approve_song_change_request(req_id uuid) returns text
+create or replace function approve_song_change_request(req_id uuid) returns uuid
   language plpgsql security definer set search_path = public as $$
 declare
   r record;
-  applied_id text;
+  applied_id uuid;
 begin
   if not is_admin() then raise exception 'forbidden'; end if;
   select * into r from song_change_requests where id = req_id and status = 'pending';
   if r is null then raise exception 'not found or not pending'; end if;
 
   if r.kind = 'create' then
-    insert into songs (id, title, artist, key, capo, bpm, content)
-    values (r.proposed_id, r.title, r.artist, r.music_key, r.capo, r.bpm, r.content);
-    applied_id := r.proposed_id;
+    insert into songs (title, artist, key, capo, bpm, content)
+    values (r.title, r.artist, r.music_key, r.capo, r.bpm, r.content)
+    returning id into applied_id;
   else
     update songs set
       title = r.title, artist = r.artist, key = r.music_key,

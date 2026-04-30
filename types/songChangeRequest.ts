@@ -14,7 +14,6 @@ export interface SongChangeRequest extends SongChangeRequestPatch {
   id: string;
   kind: ChangeRequestKind;
   song_id: string | null;
-  proposed_id: string | null;
   requester_id: string;
   status: ChangeRequestStatus;
   reason: string | null;

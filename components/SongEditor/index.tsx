@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EditorData } from '@/types/sheet';
 import { GENDERS, MUSIC_KEYS, ROUTES } from '@/lib/constants';
-import { generateContent, parseCodeToData, parseSheet, slugify } from '@/lib/sheet';
+import { generateContent, parseCodeToData, parseSheet } from '@/lib/sheet';
 import { emptySection } from '@/lib/sheet/editor';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { useSession } from '@/lib/hooks/useSession';
@@ -195,7 +195,8 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
           }
           return;
         }
-        const id = slugify(saveTitle);
+        // id는 DB가 gen_random_uuid()로 발급. 클라에서 미리 만들어 보내 RLS insert 후 select 우회.
+        const id = crypto.randomUUID();
         const r = await createSongAction({
           id,
           title: saveTitle,
@@ -215,8 +216,7 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
       }
 
       if (mode === 'create-request') {
-        const proposedId = slugify(saveTitle);
-        const r = await requestSongCreateAction(proposedId, requestPatch);
+        const r = await requestSongCreateAction(requestPatch);
         if (r.ok) {
           setResult({
             ok: true,

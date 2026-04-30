@@ -61,7 +61,6 @@ export async function deleteSongAction(id: string): Promise<ActionResult> {
 // ─── 변경 요청 워크플로우 ─────────────────────────────────────────────────────
 
 export async function requestSongCreateAction(
-  proposedId: string,
   patch: SongChangeRequestPatch,
   reason?: string,
 ): Promise<ActionResult> {
@@ -70,7 +69,6 @@ export async function requestSongCreateAction(
   try {
     await insertChangeRequest({
       kind: 'create',
-      proposedId,
       requesterId: auth.userId,
       patch,
       reason: reason ?? null,

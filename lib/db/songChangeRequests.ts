@@ -8,18 +8,19 @@ import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 interface InsertArgs {
   kind: ChangeRequestKind;
   songId?: string | null;
-  proposedId?: string | null;
   requesterId: string;
   patch: SongChangeRequestPatch;
   reason?: string | null;
 }
+
+const SELECT_COLS =
+  'id, kind, song_id, requester_id, status, title, artist, music_key, capo, bpm, content, reason, reject_reason, reviewed_at, reviewed_by, created_at';
 
 export async function insertChangeRequest(args: InsertArgs): Promise<SongChangeRequest> {
   const sb = getSupabase();
   const row = {
     kind: args.kind,
     song_id: args.songId ?? null,
-    proposed_id: args.proposedId ?? null,
     requester_id: args.requesterId,
     title: args.patch.title,
     artist: args.patch.artist,
@@ -32,16 +33,11 @@ export async function insertChangeRequest(args: InsertArgs): Promise<SongChangeR
   const { data, error } = await sb
     .from('song_change_requests')
     .insert(row)
-    .select(
-      'id, kind, song_id, proposed_id, requester_id, status, title, artist, music_key, capo, bpm, content, reason, reject_reason, reviewed_at, reviewed_by, created_at',
-    )
+    .select(SELECT_COLS)
     .single();
   if (error || !data) throw new Error(error?.message ?? 'insert failed');
   return data as SongChangeRequest;
 }
-
-const SELECT_COLS =
-  'id, kind, song_id, proposed_id, requester_id, status, title, artist, music_key, capo, bpm, content, reason, reject_reason, reviewed_at, reviewed_by, created_at';
 
 export async function listPendingRequests(): Promise<SongChangeRequest[]> {
   if (!supabaseConfigured) return [];

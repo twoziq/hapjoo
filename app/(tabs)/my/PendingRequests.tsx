@@ -98,8 +98,8 @@ function RequestCard({
   const kindLabel = request.kind === 'create' ? '+ 추가' : '✎ 수정';
   const targetLabel =
     request.kind === 'create'
-      ? `새 곡 (id: ${request.proposed_id})`
-      : `편집: ${request.song_id}`;
+      ? '새 곡 (승인 시 id 발급)'
+      : `편집: ${request.song_id?.slice(0, 8)}…`;
 
   return (
     <li className="bg-white border border-gray-200 rounded-2xl p-4">

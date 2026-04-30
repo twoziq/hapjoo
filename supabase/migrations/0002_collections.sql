@@ -30,7 +30,7 @@ create index if not exists collection_members_user_idx
 
 create table if not exists collection_songs (
   collection_id uuid not null references collections(id) on delete cascade,
-  song_id       text not null references songs(id) on delete cascade,
+  song_id       uuid not null references songs(id) on delete cascade,
   added_by      uuid references auth.users(id) on delete set null,
   added_at      timestamptz not null default now(),
   primary key (collection_id, song_id)
