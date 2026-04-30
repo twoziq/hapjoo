@@ -1,5 +1,5 @@
-// Songs are auto-discovered from data/songs/**/*.txt — no registration needed.
-// Drop a .txt file in the right folder and it will appear automatically.
+// data/songs/**/*.txt 파일들은 scripts/generate-seed-sql.mjs가 읽어
+// supabase에 일괄 시드하는 source 자료. 런타임에 직접 읽지 않음.
 
 export interface SongEntry {
   id: string;
@@ -7,5 +7,4 @@ export interface SongEntry {
   artist: string;
   key: string;
   gender?: '남' | '여';
-  folder?: string | null;
 }

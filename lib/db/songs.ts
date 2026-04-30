@@ -2,7 +2,7 @@ import { unstable_cache } from 'next/cache';
 import type { DbSong } from '@/types/song';
 import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 
-export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm' | 'folder'>;
+export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm'>;
 
 export const SONGS_TAG = 'songs';
 export const SONGS_PAGE_SIZE = 50;
@@ -17,7 +17,7 @@ export async function fetchSongsPage(offset: number, limit: number): Promise<Son
   const sb = getSupabase();
   const { data, error } = await sb
     .from('songs')
-    .select('id, title, artist, key, capo, bpm, folder')
+    .select('id, title, artist, key, capo, bpm')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit);
   if (error) throw new Error(`fetchSongsPage: ${error.message}`);
@@ -42,7 +42,7 @@ export async function searchSongsPage(
   const pat = `%${sanitized}%`;
   const { data, error } = await sb
     .from('songs')
-    .select('id, title, artist, key, capo, bpm, folder')
+    .select('id, title, artist, key, capo, bpm')
     .or(`title.ilike.${pat},artist.ilike.${pat}`)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit);

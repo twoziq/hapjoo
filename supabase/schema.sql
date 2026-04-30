@@ -10,16 +10,15 @@ create table if not exists songs (
   key         text default 'C',
   capo        integer default 0,
   bpm         integer default 80,
-  folder      text,
   content     text not null,
   notes       jsonb default '{}',
   created_at  timestamptz default now()
 );
 
 -- 기존 DB에 신규 컬럼 추가용 마이그레이션
-alter table songs add column if not exists bpm    integer default 80;
-alter table songs add column if not exists folder text;
-alter table songs add column if not exists notes  jsonb default '{}';
+alter table songs add column if not exists bpm   integer default 80;
+alter table songs add column if not exists notes jsonb default '{}';
+alter table songs drop column if exists folder;
 
 alter table songs enable row level security;
 

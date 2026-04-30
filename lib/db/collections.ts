@@ -81,7 +81,7 @@ export async function listCollectionSongs(collectionId: string): Promise<SongRow
   const sb = getSupabase();
   const { data, error } = await sb
     .from('collection_songs')
-    .select('songs(id, title, artist, key, capo, bpm, folder)')
+    .select('songs(id, title, artist, key, capo, bpm)')
     .eq('collection_id', collectionId)
     .order('added_at', { ascending: false });
   if (error) throw new Error(`listCollectionSongs: ${error.message}`);

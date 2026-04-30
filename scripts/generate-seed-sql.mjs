@@ -44,7 +44,7 @@ function dollarQuote(s) {
 const rows = [];
 const seenIds = new Set();
 
-function pushRow(srcId, folder, filePath) {
+function pushRow(srcId, filePath) {
   if (seenIds.has(srcId)) {
     console.error(`  ⚠ 같은 파일명 중복 — ${srcId} (${filePath} 무시)`);
     return;
@@ -52,14 +52,14 @@ function pushRow(srcId, folder, filePath) {
   seenIds.add(srcId);
   const content = fs.readFileSync(filePath, 'utf8');
   const meta = parseMeta(content);
-  rows.push({ srcId, folder, content, ...meta });
+  rows.push({ srcId, content, ...meta });
 }
 
 const topEntries = fs.readdirSync(SONGS_DIR, { withFileTypes: true });
 for (const e of topEntries) {
   if (!e.isDirectory() && e.name.endsWith('.txt')) {
     const id = e.name.replace(/\.txt$/, '');
-    pushRow(id, null, path.join(SONGS_DIR, e.name));
+    pushRow(id, path.join(SONGS_DIR, e.name));
   }
 }
 for (const e of topEntries) {
@@ -74,7 +74,7 @@ for (const e of topEntries) {
         continue;
       }
       const id = name.replace(/\.txt$/, '');
-      pushRow(id, e.name, path.join(subDir, name));
+      pushRow(id, path.join(subDir, name));
     }
   }
 }
@@ -188,4 +188,4 @@ sql.push('commit;');
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, sql.join('\n'));
 console.log(`✓ ${rows.length}개 곡으로 ${path.relative(ROOT, OUT)} 생성`);
-for (const r of rows) console.log(`  - [${r.folder ?? '(root)'}] ${r.title} / ${r.artist}`);
+for (const r of rows) console.log(`  - ${r.title} / ${r.artist}`);

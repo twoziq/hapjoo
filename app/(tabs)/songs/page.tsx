@@ -12,7 +12,6 @@ export default async function SongsPage() {
     title: s.title,
     artist: s.artist,
     key: s.key,
-    folder: s.folder ?? null,
   }));
 
   return (
