@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# 1회성 초기화 SQL (generator로 생성, Dashboard에서 직접 실행)
+supabase/migrations/0004_unify_uuid_and_reseed.sql
+
