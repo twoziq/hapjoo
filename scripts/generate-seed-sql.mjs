@@ -171,15 +171,14 @@ sql.push('revoke all on function approve_song_change_request(uuid) from public;'
 sql.push('grant execute on function approve_song_change_request(uuid) to authenticated;');
 sql.push('');
 sql.push('-- 6) 65곡 seed (id는 DB가 gen_random_uuid()로 자동 발급)');
+sql.push("--    folder 컬럼은 더 이상 인위적 분류로 쓰지 않음 (entertain/output 구분 무의미) — 모두 null.");
 for (const r of rows) {
-  const folder = r.folder === null ? 'null' : `'${escapeIdent(r.folder)}'`;
-  sql.push('insert into songs (title, artist, key, capo, bpm, folder, content) values (');
+  sql.push('insert into songs (title, artist, key, capo, bpm, content) values (');
   sql.push(`  '${escapeIdent(r.title)}',`);
   sql.push(`  '${escapeIdent(r.artist)}',`);
   sql.push(`  '${escapeIdent(r.key)}',`);
   sql.push(`  ${r.capo},`);
   sql.push(`  ${r.bpm},`);
-  sql.push(`  ${folder},`);
   sql.push(`  ${dollarQuote(r.content)}`);
   sql.push(');');
   sql.push('');
