@@ -8,7 +8,10 @@ begin;
 -- 1) 기존 songs 데이터 + cascade로 의존 테이블(user_songs/collection_songs/rooms/song_change_requests) 비우기
 truncate table songs cascade;
 
--- 2) FK constraint 먼저 drop (타입 변경 중 type mismatch 회피)
+-- 2) songs.id를 참조하는 의존성(policy, function, FK) 모두 떼기
+--    PostgreSQL: 컬럼 타입 변경 시 그 컬럼을 참조하는 policy/FK가 있으면 ERROR 0A000.
+drop policy if exists "Editors update songs" on songs;
+drop function if exists can_edit_song(text);
 alter table user_songs           drop constraint if exists user_songs_song_id_fkey;
 alter table collection_songs     drop constraint if exists collection_songs_song_id_fkey;
 alter table rooms                drop constraint if exists rooms_song_id_fkey;
@@ -23,7 +26,18 @@ alter table collection_songs     alter column song_id type uuid using song_id::u
 alter table rooms                alter column song_id type uuid using song_id::uuid;
 alter table song_change_requests alter column song_id type uuid using song_id::uuid;
 
--- 3b) FK constraint 재생성 (원래 on delete cascade 정책 유지; rooms는 cascade 없었음)
+-- 4) function/policy/FK 재생성 (signature는 uuid 기반으로)
+create or replace function can_edit_song(sid uuid) returns boolean
+  language sql stable security definer as $$
+    select is_admin() or exists (
+      select 1 from collection_songs cs
+        join collection_members cm on cm.collection_id = cs.collection_id
+       where cs.song_id = sid and cm.user_id = auth.uid()
+    );
+$$;
+
+create policy "Editors update songs" on songs for update using (can_edit_song(id));
+
 alter table user_songs add constraint user_songs_song_id_fkey
   foreign key (song_id) references songs(id) on delete cascade;
 alter table collection_songs add constraint collection_songs_song_id_fkey

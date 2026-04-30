@@ -13,8 +13,9 @@ create or replace function is_admin() returns boolean
 $$;
 
 -- helper: 이 곡을 직접 편집할 권한이 있는가?
--- 관리자거나, 그 곡이 속한 collection 중 하나에 멤버이면 true
-create or replace function can_edit_song(sid text) returns boolean
+-- 관리자거나, 그 곡이 속한 collection 중 하나에 멤버이면 true.
+-- (0004에서 sid 인자가 text → uuid로 변경됨. 신규 셋업이면 처음부터 uuid 사용.)
+create or replace function can_edit_song(sid uuid) returns boolean
   language sql stable security definer as $$
     select is_admin() or exists (
       select 1 from collection_songs cs
