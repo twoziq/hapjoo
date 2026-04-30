@@ -64,6 +64,28 @@ export const getSongContent = unstable_cache(fetchSongContent, ['song-content'],
   revalidate: 300,
 });
 
+export interface SongMeta {
+  id: string;
+  title: string;
+  artist: string;
+  key: string;
+  capo: number;
+  bpm: number;
+  content: string;
+}
+
+export async function fetchSongMeta(id: string): Promise<SongMeta | null> {
+  if (!supabaseConfigured) return null;
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('songs')
+    .select('id, title, artist, key, capo, bpm, content')
+    .eq('id', id)
+    .single();
+  if (error || !data) return null;
+  return data as SongMeta;
+}
+
 export async function insertSong(song: Omit<DbSong, 'created_at'>): Promise<void> {
   const sb = getSupabase();
   const { error } = await sb.from('songs').insert(song);

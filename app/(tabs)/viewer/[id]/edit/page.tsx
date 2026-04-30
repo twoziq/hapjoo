@@ -1,6 +1,6 @@
-import SongEditorClient from '@/components/SongEditor';
 import { getSongContent } from '@/lib/db/songs';
 import { parseCodeToData } from '@/lib/sheet';
+import EditSongClient from './EditSongClient';
 
 export default async function EditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
@@ -16,5 +16,5 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
   }
 
   const initialData = parseCodeToData(markdown);
-  return <SongEditorClient initialData={initialData} editSongId={id} />;
+  return <EditSongClient initialData={initialData} editSongId={id} />;
 }

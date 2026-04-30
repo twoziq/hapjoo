@@ -1,30 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Session } from '@/lib/auth';
-import { onAuthStateChange, signInWithGoogle, signInWithKakao, signOut } from '@/lib/auth';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { signInWithGoogle, signInWithKakao, signOut } from '@/lib/auth';
+import { ROUTES } from '@/lib/constants';
+import { useSession } from '@/lib/hooks/useSession';
 import { supabaseConfigured } from '@/lib/supabase/client';
+import MyCollectionsClient from './MyCollectionsClient';
+import PendingRequests from './PendingRequests';
+import MyRequests from './MyRequests';
 
-export default function SettingsPage() {
-  const [user, setUser] = useState<Session['user'] | null>(null);
-  const [loading, setLoading] = useState<boolean>(supabaseConfigured);
+export default function MyClient() {
+  const router = useRouter();
+  const search = useSearchParams();
+  const { session, loading, isAuthenticated, isAdmin } = useSession();
+  const [authError] = useState<string | null>(() => search.get('auth_error'));
 
   useEffect(() => {
-    if (!supabaseConfigured) return;
-    const {
-      data: { subscription },
-    } = onAuthStateChange((session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+    if (authError) router.replace(ROUTES.my);
+  }, [authError, router]);
 
-  const userMeta = user?.user_metadata as { avatar_url?: string; full_name?: string } | undefined;
+  const userMeta = session?.user.user_metadata as
+    | { avatar_url?: string; full_name?: string }
+    | undefined;
 
   return (
-    <div className="max-w-md mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-xl font-bold text-gray-800">설정</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <h1 className="text-xl font-bold text-gray-800">마이</h1>
+
+      {authError && (
+        <div className="text-xs bg-red-50 text-red-600 border border-red-200 rounded-xl px-3 py-2">
+          로그인 실패: {authError}
+        </div>
+      )}
 
       <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
@@ -38,7 +46,7 @@ export default function SettingsPage() {
             <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse" />
             <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
           </div>
-        ) : user ? (
+        ) : session ? (
           <div className="px-4 py-4 space-y-4">
             <div className="flex items-center gap-3">
               {userMeta?.avatar_url ? (
@@ -50,15 +58,20 @@ export default function SettingsPage() {
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                  {(userMeta?.full_name ?? user.email ?? '?')[0]?.toUpperCase()}
+                  {(userMeta?.full_name ?? session.user.email ?? '?')[0]?.toUpperCase()}
                 </div>
               )}
-              <div>
-                <div className="text-sm font-medium text-gray-800">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-gray-800 truncate">
                   {userMeta?.full_name ?? '사용자'}
                 </div>
-                <div className="text-xs text-gray-400">{user.email}</div>
+                <div className="text-xs text-gray-400 truncate">{session.user.email}</div>
               </div>
+              {isAdmin && (
+                <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  ADMIN
+                </span>
+              )}
             </div>
             <button
               onClick={() => signOut()}
@@ -106,6 +119,31 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      {isAuthenticated && (
+        <section>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">저장소</h2>
+          <MyCollectionsClient />
+        </section>
+      )}
+
+      {isAuthenticated && isAdmin && (
+        <section>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            변경 요청
+          </h2>
+          <PendingRequests />
+        </section>
+      )}
+
+      {isAuthenticated && !isAdmin && session && (
+        <section>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            내 요청
+          </h2>
+          <MyRequests userId={session.user.id} />
+        </section>
+      )}
     </div>
   );
 }

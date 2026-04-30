@@ -9,13 +9,14 @@ export const ROUTES = {
   songsNew: '/songs/new',
   chords: '/chords',
   tuner: '/tuner',
-  settings: '/settings',
-  storage: '/storage',
-  storageDetail: (id: string) => `/storage/${id}`,
+  my: '/my',
+  myDetail: (id: string) => `/my/${id}`,
   invite: (code: string) => `/invite/${code}`,
   viewer: (id: string) => `/viewer/${id}`,
   viewerEdit: (id: string) => `/viewer/${id}/edit`,
 } as const;
+
+export const ADMIN_EMAIL = 'kshh423@gmail.com';
 
 export const MUSIC_KEYS = [
   'C',

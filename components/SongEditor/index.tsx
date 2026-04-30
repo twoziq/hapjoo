@@ -9,13 +9,26 @@ import { emptySection } from '@/lib/sheet/editor';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { useSession } from '@/lib/hooks/useSession';
 import { signInWithGoogle } from '@/lib/auth';
-import { createSongAction, updateSongAction } from '@/app/(tabs)/songs/actions';
+import {
+  createSongAction,
+  requestSongCreateAction,
+  requestSongEditAction,
+  updateSongAction,
+} from '@/app/(tabs)/songs/actions';
 import { SectionEditor } from './SectionEditor';
 import { useEditorState } from './hooks/useEditorState';
+
+export type SongEditorMode =
+  | 'create-direct'
+  | 'create-request'
+  | 'edit-direct'
+  | 'edit-request'
+  | 'none';
 
 interface Props {
   initialData?: EditorData;
   editSongId?: string;
+  mode?: SongEditorMode;
 }
 
 const DEFAULT_DATA: EditorData = {
@@ -28,11 +41,12 @@ const DEFAULT_DATA: EditorData = {
   sections: [emptySection('Verse')],
 };
 
-export default function SongEditorClient({ initialData, editSongId }: Props) {
+export default function SongEditorClient({ initialData, editSongId, mode = 'none' }: Props) {
   const router = useRouter();
   const isEdit = !!editSongId;
   const data = initialData ?? DEFAULT_DATA;
   const { isAuthenticated, loading: sessionLoading } = useSession();
+  const isRequestMode = mode === 'create-request' || mode === 'edit-request';
 
   const [title, setTitle] = useState(data.title);
   const [artist, setArtist] = useState(data.artist);
@@ -119,11 +133,23 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
       setResult({ ok: false, msg: '곡 추가/편집은 로그인이 필요합니다.' });
       return;
     }
+    if (mode === 'none') {
+      setResult({ ok: false, msg: '저장 권한이 없습니다.' });
+      return;
+    }
     setResult(null);
     const content = rawContent;
+    const requestPatch = {
+      title: saveTitle,
+      artist: saveArtist,
+      music_key: saveKey,
+      capo: saveCapo,
+      bpm: saveBpm,
+      content,
+    };
 
     startTransition(async () => {
-      if (isEdit && editSongId) {
+      if (mode === 'edit-direct' && editSongId) {
         const r = await updateSongAction(editSongId, {
           title: saveTitle,
           artist: saveArtist,
@@ -141,7 +167,34 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
         return;
       }
 
-      if (supabaseConfigured) {
+      if (mode === 'edit-request' && editSongId) {
+        const r = await requestSongEditAction(editSongId, requestPatch);
+        if (r.ok) {
+          setResult({
+            ok: true,
+            msg: '수정 요청을 보냈습니다. 관리자 검토 후 반영됩니다.',
+          });
+          setTimeout(() => router.push(ROUTES.viewer(editSongId)), 1200);
+        } else {
+          setResult({ ok: false, msg: `요청 실패: ${r.error}` });
+        }
+        return;
+      }
+
+      if (mode === 'create-direct') {
+        if (!supabaseConfigured) {
+          try {
+            await navigator.clipboard.writeText(content);
+            setResult({
+              ok: true,
+              msg: '악보 텍스트가 클립보드에 복사됐습니다. data/songs/ 폴더에 .txt 파일로 붙여넣어 추가하세요.',
+            });
+          } catch {
+            setResult({ ok: false, msg: '클립보드 복사 실패. 미리보기에서 직접 복사해주세요.' });
+            setShowPreview(true);
+          }
+          return;
+        }
         const id = slugify(saveTitle);
         const r = await createSongAction({
           id,
@@ -161,18 +214,29 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
         return;
       }
 
-      try {
-        await navigator.clipboard.writeText(content);
-        setResult({
-          ok: true,
-          msg: '악보 텍스트가 클립보드에 복사됐습니다. data/songs/ 폴더에 .txt 파일로 붙여넣어 추가하세요.',
-        });
-      } catch {
-        setResult({ ok: false, msg: '클립보드 복사 실패. 미리보기에서 직접 복사해주세요.' });
-        setShowPreview(true);
+      if (mode === 'create-request') {
+        const proposedId = slugify(saveTitle);
+        const r = await requestSongCreateAction(proposedId, requestPatch);
+        if (r.ok) {
+          setResult({
+            ok: true,
+            msg: '추가 요청을 보냈습니다. 관리자 검토 후 카탈로그에 반영됩니다.',
+          });
+          setTimeout(() => router.push(ROUTES.my), 1200);
+        } else {
+          setResult({ ok: false, msg: `요청 실패: ${r.error}` });
+        }
+        return;
       }
     });
   }
+
+  const saveLabel = (() => {
+    if (isPending) return mode === 'create-request' || mode === 'edit-request' ? '요청 중…' : '저장 중…';
+    if (mode === 'create-request') return '추가 요청';
+    if (mode === 'edit-request') return '수정 요청';
+    return '저장';
+  })();
 
   const content = generateContent(title, artist, key, gender, capo, bpm, sections);
 
@@ -189,7 +253,15 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
           >
             ←
           </button>
-          <h1 className="flex-1 text-base font-bold">{isEdit ? '악보 편집' : '새 악보 작성'}</h1>
+          <h1 className="flex-1 text-base font-bold">
+            {isEdit
+              ? mode === 'edit-request'
+                ? '악보 수정 요청'
+                : '악보 편집'
+              : mode === 'create-request'
+                ? '악보 추가 요청'
+                : '새 악보 작성'}
+          </h1>
           {!showCode && (
             <button
               onClick={() => setShowPreview((p) => !p)}
@@ -210,10 +282,12 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
           </button>
           <button
             onClick={save}
-            disabled={isPending}
-            className="text-xs px-4 py-1.5 rounded-full font-bold bg-indigo-600 text-white disabled:opacity-50"
+            disabled={isPending || mode === 'none'}
+            className={`text-xs px-4 py-1.5 rounded-full font-bold text-white disabled:opacity-50 ${
+              isRequestMode ? 'bg-amber-600' : 'bg-indigo-600'
+            }`}
           >
-            {isPending ? '저장 중…' : '저장'}
+            {saveLabel}
           </button>
         </div>
         {result && (
@@ -331,6 +405,13 @@ export default function SongEditorClient({ initialData, editSongId }: Props) {
               >
                 로그인
               </button>
+            </div>
+          )}
+
+          {isAuthenticated && isRequestMode && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 leading-relaxed">
+              <strong>변경 요청:</strong> 카탈로그에 직접 반영되지 않고 관리자에게 요청이 전달됩니다.
+              관리자가 승인해야 적용돼요.
             </div>
           )}
 

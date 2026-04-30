@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@/lib/auth';
 import { getSession, onAuthStateChange } from '@/lib/auth';
+import { ADMIN_EMAIL } from '@/lib/constants';
 import { supabaseConfigured } from '@/lib/supabase/client';
 
 export function useSession() {
@@ -35,5 +36,12 @@ export function useSession() {
     };
   }, []);
 
-  return { session, loading, isAuthenticated: !!session };
+  const email = session?.user.email ?? null;
+  return {
+    session,
+    loading,
+    isAuthenticated: !!session,
+    email,
+    isAdmin: email === ADMIN_EMAIL,
+  };
 }

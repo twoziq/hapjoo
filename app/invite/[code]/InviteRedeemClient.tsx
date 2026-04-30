@@ -24,7 +24,7 @@ export default function InviteRedeemClient({ code }: Props) {
     joinByCode(code)
       .then((cid) => {
         setStatus('joined');
-        router.replace(ROUTES.storageDetail(cid));
+        router.replace(ROUTES.myDetail(cid));
       })
       .catch((e: unknown) => {
         setStatus('error');
@@ -68,7 +68,7 @@ export default function InviteRedeemClient({ code }: Props) {
         <h1 className="text-base font-bold mb-2 text-red-600">초대 처리 실패</h1>
         <p className="text-xs text-gray-500 mb-4 leading-relaxed">{error}</p>
         <button
-          onClick={() => router.push(ROUTES.storage)}
+          onClick={() => router.push(ROUTES.my)}
           className="text-xs font-bold px-4 py-2 rounded-full bg-indigo-600 text-white"
         >
           저장소로 이동

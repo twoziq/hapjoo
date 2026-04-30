@@ -6,10 +6,11 @@ import {
   listMyCollections,
   listCollectionsContainingSong,
 } from '@/lib/db/collections';
+import { useSession } from '@/lib/hooks/useSession';
 import {
   createCollectionAction,
   saveSongToCollectionsAction,
-} from '@/app/(tabs)/storage/actions';
+} from '@/app/(tabs)/my/actions';
 
 interface Props {
   songId: string;
@@ -18,6 +19,8 @@ interface Props {
 }
 
 export default function SaveToCollectionModal({ songId, onClose, onSaved }: Props) {
+  const { session } = useSession();
+  const myUserId = session?.user.id ?? null;
   const [collections, setCollections] = useState<CollectionWithCounts[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [initialSelected, setInitialSelected] = useState<Set<string>>(new Set());
@@ -115,22 +118,30 @@ export default function SaveToCollectionModal({ songId, onClose, onSaved }: Prop
             <ul className="flex flex-col gap-1">
               {collections.map((c) => {
                 const checked = selected.has(c.id);
+                const wasInitiallyChecked = initialSelected.has(c.id);
+                const isOwner = myUserId !== null && c.owner_id === myUserId;
+                // 비-owner 멤버는 이미 담겨있던 곡을 빼지는 못함 (RLS: owner만 DELETE 가능)
+                const cannotUncheck = !isOwner && wasInitiallyChecked;
                 return (
                   <li key={c.id}>
                     <label
-                      className={`flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer ${
-                        checked ? 'bg-indigo-50' : 'hover:bg-gray-50'
-                      }`}
+                      className={`flex items-center gap-3 px-2 py-2.5 rounded-lg ${
+                        cannotUncheck ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                      } ${checked ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => toggle(c.id)}
+                        disabled={cannotUncheck}
+                        onChange={() => !cannotUncheck && toggle(c.id)}
                         className="w-4 h-4 accent-indigo-600"
                       />
-                      <span className="text-sm flex-1">
+                      <span className="text-sm flex-1 truncate">
                         {c.is_personal && <span className="mr-1">👤</span>}
                         {c.name}
+                        {cannotUncheck && (
+                          <span className="ml-2 text-[10px] text-amber-600">owner만 제거 가능</span>
+                        )}
                       </span>
                       <span className="text-[10px] text-gray-400">{c.song_count}곡</span>
                     </label>

@@ -1,5 +1,5 @@
-import SongEditorClient from '@/components/SongEditor';
+import NewSongClient from './NewSongClient';
 
 export default function NewSongPage() {
-  return <SongEditorClient />;
+  return <NewSongClient />;
 }

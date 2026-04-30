@@ -103,6 +103,14 @@ create policy "Authenticated update rooms" on rooms for update using (auth.role(
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Song change requests + admin/editor RLS — see
+-- supabase/migrations/0003_song_change_requests.sql.
+-- This migration replaces the songs INSERT/UPDATE/DELETE policies above with
+-- is_admin()/can_edit_song() based ones, and adds the song_change_requests
+-- table for the admin-approval workflow.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Sample songs — seed for first-time setup.
 -- ─────────────────────────────────────────────────────────────────────────────
 insert into songs (id, title, artist, key, capo, bpm, content) values

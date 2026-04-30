@@ -32,7 +32,7 @@ interface DetailData {
   membership: CollectionMember;
 }
 
-export default function StorageDetailClient({ collectionId }: Props) {
+export default function MyDetailClient({ collectionId }: Props) {
   const router = useRouter();
   const { session, loading: sessionLoading, isAuthenticated } = useSession();
   const [data, setData] = useState<DetailData | null>(null);
@@ -136,7 +136,7 @@ export default function StorageDetailClient({ collectionId }: Props) {
     startTransition(async () => {
       const r = await deleteCollectionAction(collection.id);
       if (r.ok) {
-        router.push(ROUTES.storage);
+        router.push(ROUTES.my);
       } else {
         setError(r.error);
         setConfirmDelete(false);
@@ -149,7 +149,7 @@ export default function StorageDetailClient({ collectionId }: Props) {
     startTransition(async () => {
       const r = await leaveCollectionAction(collection.id);
       if (r.ok) {
-        router.push(ROUTES.storage);
+        router.push(ROUTES.my);
       } else {
         setError(r.error);
         setConfirmLeave(false);
@@ -171,7 +171,7 @@ export default function StorageDetailClient({ collectionId }: Props) {
       <div className="sticky top-0 bg-white border-b border-gray-100 -mx-4 px-4 py-3 mb-4 z-10">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push(ROUTES.storage)}
+            onClick={() => router.push(ROUTES.my)}
             aria-label="뒤로"
             className="text-gray-400 text-lg px-1"
           >

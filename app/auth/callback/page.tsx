@@ -18,7 +18,7 @@ export default function AuthCallbackPage() {
     const errorDescription = params.get('error_description');
 
     if (errorDescription) {
-      router.replace(`/settings?auth_error=${encodeURIComponent(errorDescription)}`);
+      router.replace(`/my?auth_error=${encodeURIComponent(errorDescription)}`);
       return;
     }
 

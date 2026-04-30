@@ -9,7 +9,7 @@ import { listMyCollections } from '@/lib/db/collections';
 import { useSession } from '@/lib/hooks/useSession';
 import { createCollectionAction } from './actions';
 
-export default function StorageClient() {
+export default function MyCollectionsClient() {
   const router = useRouter();
   const { isAuthenticated, loading: sessionLoading } = useSession();
   const [collections, setCollections] = useState<CollectionWithCounts[] | null>(null);
@@ -40,7 +40,7 @@ export default function StorageClient() {
       if (r.ok) {
         setShowCreate(false);
         setDraft('');
-        router.push(ROUTES.storageDetail(r.data.id));
+        router.push(ROUTES.myDetail(r.data.id));
       } else {
         setError(r.error);
       }
@@ -52,17 +52,8 @@ export default function StorageClient() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="text-center text-sm text-gray-400 py-8 space-y-3">
-        <p>저장소는 로그인 후 사용할 수 있어요.</p>
-        <Link
-          href={ROUTES.settings}
-          className="inline-block text-xs font-bold px-4 py-2 rounded-full bg-indigo-600 text-white"
-        >
-          로그인하러 가기
-        </Link>
-      </div>
-    );
+    // 로그인 가드는 부모 MyClient에서 처리. 여기 도달하지 않음.
+    return null;
   }
 
   if (collections === null) {
@@ -82,7 +73,7 @@ export default function StorageClient() {
         {collections.map((c) => (
           <li key={c.id}>
             <Link
-              href={ROUTES.storageDetail(c.id)}
+              href={ROUTES.myDetail(c.id)}
               prefetch
               className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
             >
