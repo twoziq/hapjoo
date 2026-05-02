@@ -15,6 +15,7 @@ interface Props {
   onChordClick: (c: string) => void;
   onLongPress: () => void;
   onTap: () => void;
+  roundedClass?: string;
 }
 
 const LONG_PRESS_MS = 500;
@@ -32,6 +33,7 @@ function MeasureCellImpl({
   onChordClick,
   onLongPress,
   onTap,
+  roundedClass,
 }: Props) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasLongPress = useRef(false);
@@ -87,6 +89,7 @@ function MeasureCellImpl({
       className={`px-2 pb-2 transition-colors relative touch-none select-none min-w-0 overflow-hidden
         ${cursorClass}
         ${isRest ? 'pointer-events-none' : 'cursor-pointer'}
+        ${roundedClass ?? ''}
       `}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}

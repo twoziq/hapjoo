@@ -100,7 +100,9 @@ export default function SheetViewer({
 
             {block.rows.length > 0 && (
               <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col gap-px bg-gray-200">
-                {block.rows.map((os) => {
+                {block.rows.map((os, osIdx) => {
+                  const isFirstOsRow = osIdx === 0;
+                  const isLastOsRow = osIdx === block.rows.length - 1;
                   const chords = os.section.chords.map(tr);
                   const measures = os.section.measures?.length
                     ? os.section.measures
@@ -128,6 +130,12 @@ export default function SheetViewer({
                           const nk = noteKey(os.originalIdx, mi);
                           const note = os.originalIdx >= 0 ? notes[nk] : undefined;
                           const isCur = currentPos?.si === os.originalIdx && currentPos?.mi === mi;
+                          const roundedClass = [
+                            isFirstOsRow && mi === 0 ? 'rounded-tl-xl' : '',
+                            isFirstOsRow && (count <= 4 ? mi === count - 1 : mi === cols - 1) ? 'rounded-tr-xl' : '',
+                            isLastOsRow && (count <= 4 ? mi === 0 : mi === Math.floor((count - 1) / cols) * cols) ? 'rounded-bl-xl' : '',
+                            isLastOsRow && mi === count - 1 ? 'rounded-br-xl' : '',
+                          ].filter(Boolean).join(' ');
                           return (
                             <MeasureCell
                               key={cellKey}
@@ -145,6 +153,7 @@ export default function SheetViewer({
                               onChordClick={setActiveChord}
                               onLongPress={() => setActiveNote({ origIdx: os.originalIdx, mi })}
                               onTap={() => onCellTap(os.originalIdx, mi)}
+                              roundedClass={roundedClass}
                             />
                           );
                         })}
