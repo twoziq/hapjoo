@@ -45,24 +45,32 @@ export default function SheetViewer({
   const { notes, saveNote } = useNotes(songId);
 
   const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const prevSiRef = useRef<number | null>(null);
+  const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const prevBlockIdRef = useRef<string | null>(null);
+
+  const blocks = useMemo(() => toBlocks(oSections), [oSections]);
+
+  const siToBlockId = useMemo(() => {
+    const map = new Map<number, string>();
+    blocks.forEach((block) => {
+      block.rows.forEach((os) => {
+        map.set(os.originalIdx, block.id);
+      });
+    });
+    return map;
+  }, [blocks]);
 
   useEffect(() => {
     if (!isPlaying) {
-      prevSiRef.current = null;
+      prevBlockIdRef.current = null;
       return;
     }
     if (!currentPos) return;
-    if (prevSiRef.current === currentPos.si) return;
-    prevSiRef.current = currentPos.si;
-
-    const os = oSections.find((s) => s.originalIdx === currentPos.si);
-    if (!os) return;
-    rowRefs.current.get(os.uid)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [currentPos, isPlaying, oSections]);
-
-  const blocks = useMemo(() => toBlocks(oSections), [oSections]);
+    const blockId = siToBlockId.get(currentPos.si);
+    if (!blockId || prevBlockIdRef.current === blockId) return;
+    prevBlockIdRef.current = blockId;
+    blockRefs.current.get(blockId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [currentPos, isPlaying, siToBlockId]);
 
   function tr(c: string) {
     return transposeChord(c, semitones);
@@ -74,7 +82,13 @@ export default function SheetViewer({
   return (
     <div className="pb-4">
       {blocks.map((block) => (
-        <div key={block.id}>
+        <div
+          key={block.id}
+          ref={(el) => {
+            if (el) blockRefs.current.set(block.id, el);
+            else blockRefs.current.delete(block.id);
+          }}
+        >
           <div className="mb-3">
             {block.label && (
               <div className="flex items-center gap-1 mt-4 mb-1 px-0.5 min-h-[1.5rem]">
@@ -96,14 +110,7 @@ export default function SheetViewer({
                   const cols = count <= 4 ? count : 4;
 
                   return (
-                    <div
-                      key={os.uid}
-                      ref={(el) => {
-                        if (el) rowRefs.current.set(os.uid, el);
-                        else rowRefs.current.delete(os.uid);
-                      }}
-                      className="flex items-stretch gap-px bg-gray-200"
-                    >
+                    <div key={os.uid} className="flex items-stretch gap-px bg-gray-200">
                       <div
                         className="flex-1 grid gap-px"
                         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
