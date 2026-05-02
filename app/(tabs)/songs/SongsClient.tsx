@@ -114,6 +114,20 @@ export default function SongsClient({ initialItems, initialHasMore, pageSize }: 
         className="w-full mb-4 px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 bg-gray-50"
       />
 
+      {!isSearching && (
+        <Link
+          href={ROUTES.songsFolder('entertain')}
+          prefetch
+          className="flex items-center justify-between w-full mb-4 p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📁</span>
+            <span className="font-semibold">SK엔터</span>
+          </div>
+          <span className="text-xs text-gray-400">›</span>
+        </Link>
+      )}
+
       {showEmptyState && (
         <p className="text-center text-xs text-gray-400 py-8">검색 결과가 없어요.</p>
       )}

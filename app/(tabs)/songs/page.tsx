@@ -4,6 +4,10 @@ import { ROUTES } from '@/lib/constants';
 import { SONGS_PAGE_SIZE, getSongsPageCached, getFolderSongsCached } from '@/lib/db/songs';
 import SongsClient from './SongsClient';
 
+const FOLDER_LABELS: Record<string, string> = {
+  entertain: 'SK엔터',
+};
+
 export default async function SongsPage({
   searchParams,
 }: {
@@ -33,7 +37,7 @@ export default async function SongsPage({
             ← 뒤로
           </Link>
           <span className="text-gray-300">|</span>
-          <h1 className="text-xl font-bold">{activeFolder}</h1>
+          <h1 className="text-xl font-bold">{FOLDER_LABELS[activeFolder] ?? activeFolder}</h1>
         </div>
         <ul className="flex flex-col gap-2">
           {items.map((song) => (
@@ -79,17 +83,6 @@ export default async function SongsPage({
           + 악보 추가
         </Link>
       </div>
-      <Link
-        href={ROUTES.songsFolder('entertain')}
-        prefetch
-        className="flex items-center justify-between w-full mb-4 p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">📁</span>
-          <span className="font-semibold">entertain</span>
-        </div>
-        <span className="text-xs text-gray-400">›</span>
-      </Link>
       <SongsClient
         initialItems={initialItems}
         initialHasMore={hasMore}
