@@ -20,7 +20,10 @@ function MeasureCellImpl({ measure, index, onChange, onChordBlur }: Props) {
         type="text"
         value={measure.chord}
         tabIndex={-1}
-        onChange={(e) => onChange({ chord: e.target.value.toUpperCase() })}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange({ chord: v ? v[0].toUpperCase() + v.slice(1) : '' });
+        }}
         onBlur={onChordBlur ? (e) => onChordBlur(e.target.value) : undefined}
         onClick={(e) => (e.currentTarget as HTMLInputElement).focus()}
         placeholder={PLACEHOLDERS[index]}

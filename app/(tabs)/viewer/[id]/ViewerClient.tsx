@@ -221,13 +221,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
                   ⭐
                 </button>
                 <button
-                  onClick={() => router.push(ROUTES.viewerEdit(songId))}
-                  aria-label="악보 편집"
-                  className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
-                >
-                  ✎
-                </button>
-                <button
                   onClick={() => setRoomEnabled((v) => !v)}
                   aria-label="합주 모드"
                   title="합주 모드"
@@ -236,6 +229,13 @@ export default function ViewerClient({ markdown, songId }: Props) {
                   }`}
                 >
                   ♪
+                </button>
+                <button
+                  onClick={() => router.push(ROUTES.viewerEdit(songId))}
+                  aria-label="악보 수정"
+                  className="h-7 px-2.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[11px] font-semibold shrink-0"
+                >
+                  수정
                 </button>
                 <button
                   onClick={() => setHeaderCollapsed(true)}

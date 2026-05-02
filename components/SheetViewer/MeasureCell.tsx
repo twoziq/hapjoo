@@ -136,7 +136,7 @@ function MeasureCellImpl({
                       onChordClick(p);
                     }
                   }}
-                  className={`text-[10px] leading-tight text-left truncate ${
+                  className={`text-[13px] leading-none text-left truncate ${
                     p
                       ? 'text-indigo-600 font-bold hover:underline active:opacity-60'
                       : 'pointer-events-none'

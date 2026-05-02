@@ -2,7 +2,7 @@ import type { ParsedSheet, SheetMeta, SheetSection } from '@/types/sheet';
 import { CHORD_ROOT, canonicalize, normalizeChord } from './normalizer';
 
 const SEG_CHORD =
-  /^([a-gA-G][b#]?(?:maj7?|M7?|m7?|7|9|11|13|6|sus[24]?|dim7?|aug|add[0-9]+|\(add[0-9]+\)|\([b#][0-9]+\))*(?:\/[a-gA-G][b#]?)?)(\s+(.*))?$/;
+  /^([a-gA-G][b#]?(?:maj7?|M7?|m7?|7|9|11|13|6|sus[24]?|dim7?|aug|add[0-9]+|[b#][0-9]+|\(add[0-9]+\)|\([b#][0-9]+\))*(?:\/[a-gA-G][b#]?)?)(\s+(.*))?$/;
 
 function parseSegment(seg: string): { chord: string; lyric: string } {
   const t = seg.trim();

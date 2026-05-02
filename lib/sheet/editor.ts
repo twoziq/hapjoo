@@ -1,5 +1,6 @@
 import type { EditorData, Measure, Row, Section } from '@/types/sheet';
 import { parseSheet } from './parser';
+import { normalizeChord } from './normalizer';
 
 export const uid = () => Math.random().toString(36).slice(2, 8);
 
@@ -17,7 +18,7 @@ export const emptySection = (name = ''): Section => ({
 });
 
 const CHORD_RX =
-  /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+)*(?:\/[A-G][b#]?)?/gi;
+  /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+|[b#][0-9]+)*(?:\/[A-G][b#]?)?/gi;
 
 // Smart chord input — split on dots ("G.D.Em.Am") or whitespace ("G D Em Am") → 4 cells.
 // An empty segment means a deliberately blank cell (e.g. "G..D" → ['G','','','D']).
@@ -31,7 +32,7 @@ export function parseSmartChord(raw: string): string[] | null {
       const seg = p.trim();
       if (!seg) return;
       const m = seg.match(new RegExp('^(' + CHORD_RX.source + ')', 'i'));
-      if (m) result[i] = m[1].toUpperCase();
+      if (m) result[i] = normalizeChord(m[1]);
     });
     return result;
   }
