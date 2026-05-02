@@ -1,8 +1,15 @@
 import { getSongContent } from '@/lib/db/songs';
 import ViewerClient from './ViewerClient';
 
-export default async function ViewerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ViewerPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ room?: string }>;
+}) {
   const { id: rawId } = await params;
+  const { room } = await searchParams;
   const id = decodeURIComponent(rawId);
   const markdown = await getSongContent(id);
 
@@ -14,5 +21,5 @@ export default async function ViewerPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  return <ViewerClient markdown={markdown} songId={id} />;
+  return <ViewerClient markdown={markdown} songId={id} roomId={room} />;
 }

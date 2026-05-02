@@ -19,9 +19,10 @@ import { type TimeSig } from './types';
 interface Props {
   markdown: string;
   songId: string;
+  roomId?: string;
 }
 
-export default function ViewerClient({ markdown, songId }: Props) {
+export default function ViewerClient({ markdown, songId, roomId }: Props) {
   const router = useRouter();
   const [semitones, setSemitones] = useSemitones(songId);
   const [showNotes, setShowNotes] = useState(true);
@@ -30,7 +31,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [bpmToast, setBpmToast] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [loginToast, setLoginToast] = useState(false);
-  const [roomEnabled, setRoomEnabled] = useState(false);
   const { isAuthenticated } = useSession();
 
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
@@ -55,7 +55,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
   const { broadcastPlay, broadcastStop } = useRoomSync({
     songId,
-    enabled: roomEnabled,
+    roomId,
     onRemotePlay: (p) => {
       setBpm(p.bpm);
       setTimeSig(p.timeSig as TimeSig);
@@ -71,7 +71,6 @@ export default function ViewerClient({ markdown, songId }: Props) {
     },
   });
 
-  // Save last viewed song for tab navigation hints
   useEffect(() => {
     safeSetItem(STORAGE_KEYS.lastSong, songId);
   }, [songId]);
@@ -82,7 +81,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
       setBpmToast(true);
       setTimeout(() => setBpmToast(false), 3000);
     }
-    if (roomEnabled) {
+    if (roomId) {
       if (willStop) {
         broadcastStop();
       } else {
@@ -126,145 +125,122 @@ export default function ViewerClient({ markdown, songId }: Props) {
         </div>
       )}
 
-      <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
-        <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
-          {roomEnabled && !showBeatBar && (
-            <div className="flex justify-center mb-2">
-              <span className="text-[10px] text-indigo-500 bg-indigo-50 rounded-full px-2.5 py-0.5 font-semibold">
-                합주 모드 — 재생하면 모두에게 공유돼요
-              </span>
-            </div>
-          )}
+      {headerCollapsed ? (
+        <div className="fixed top-3 right-3 z-20 flex items-center gap-2">
+          <button
+            onClick={() => setHeaderCollapsed(false)}
+            className="flex items-center gap-1 h-8 px-3 rounded-full bg-white/90 backdrop-blur-sm shadow text-gray-500 text-xs font-semibold border border-gray-200"
+          >
+            <span className="text-[13px]">▾</span>
+            <span>펼치기</span>
+          </button>
+          <button
+            onClick={togglePlay}
+            aria-label={playback.isPlaying || playback.isCountingIn ? '정지' : '재생'}
+            className={`h-8 w-9 flex items-center justify-center rounded-full text-xs font-bold shadow border transition-colors ${
+              playback.isCountingIn
+                ? 'bg-amber-100 text-amber-600 border-amber-200'
+                : playback.isPlaying
+                  ? 'bg-red-100 text-red-600 border-red-200'
+                  : 'bg-indigo-600 text-white border-indigo-600'
+            }`}
+          >
+            {playback.isPlaying || playback.isCountingIn ? '■' : '▶'}
+          </button>
+        </div>
+      ) : (
+        <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
+          <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
+            {showBeatBar && (
+              <div className="flex items-center justify-center gap-2 mb-2">
+                {Array.from({ length: beatsPerBar }).map((_, i) => {
+                  const isActive = i === playback.beatState.beat;
+                  return (
+                    <span
+                      key={isActive ? `b${i}_${playback.beatState.tick}` : `b${i}`}
+                      className={`inline-block rounded-full transition-colors duration-75 ${
+                        isActive
+                          ? `w-5 h-5 beat-pulse ${playback.isCountingIn ? 'bg-amber-400' : 'bg-red-500'}`
+                          : 'w-4 h-4 bg-green-200'
+                      }`}
+                    />
+                  );
+                })}
+                {playback.isCountingIn && (
+                  <span className="text-[10px] text-amber-500 font-semibold ml-1">카운트인...</span>
+                )}
+              </div>
+            )}
 
-          {showBeatBar && (
-            <div className="flex items-center justify-center gap-2 mb-2">
-              {Array.from({ length: beatsPerBar }).map((_, i) => {
-                const isActive = i === playback.beatState.beat;
-                return (
-                  <span
-                    key={isActive ? `b${i}_${playback.beatState.tick}` : `b${i}`}
-                    className={`inline-block rounded-full transition-colors duration-75 ${
-                      isActive
-                        ? `w-5 h-5 beat-pulse ${playback.isCountingIn ? 'bg-amber-400' : 'bg-red-500'}`
-                        : 'w-4 h-4 bg-green-200'
-                    }`}
-                  />
-                );
-              })}
-              {playback.isCountingIn && (
-                <span className="text-[10px] text-amber-500 font-semibold ml-1">카운트인...</span>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-bold leading-tight truncate">
+                  {(meta.title as string) ?? '악보'}
+                </p>
+                <p className="text-[11px] text-gray-400 truncate leading-none mt-0.5">
+                  {meta.artist as string}
+                </p>
+              </div>
+              {(meta.capo as number) > 0 && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium shrink-0">
+                  카포 {meta.capo}
+                </span>
               )}
-            </div>
-          )}
-
-          {headerCollapsed ? (
-            <div className="flex items-center gap-2">
-              <span className="flex-1 text-sm font-bold text-gray-800 truncate">
-                {currentSectionLabel || (meta.title as string) || '악보'}
-              </span>
               <button
-                onClick={() => setHeaderCollapsed(false)}
+                onClick={() => setShowHelp(true)}
+                aria-label="도움말"
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xs font-bold shrink-0"
+              >
+                ?
+              </button>
+              <button
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    setLoginToast(true);
+                    setTimeout(() => setLoginToast(false), 2500);
+                    return;
+                  }
+                  setShowSaveModal(true);
+                }}
+                aria-label="저장소에 저장"
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
+              >
+                ⭐
+              </button>
+              <button
+                onClick={() => router.push(ROUTES.viewerEdit(songId))}
+                aria-label="악보 수정"
+                className="h-7 px-2.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[11px] font-semibold shrink-0"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => setHeaderCollapsed(true)}
                 className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0"
               >
-                <span className="text-[13px]">▾</span>
-                <span>펼치기</span>
-              </button>
-              <button
-                onClick={togglePlay}
-                aria-label={playback.isPlaying || playback.isCountingIn ? '정지' : '재생'}
-                className={`h-7 w-8 flex items-center justify-center rounded-full text-xs font-bold shrink-0 transition-colors ${
-                  playback.isCountingIn
-                    ? 'bg-amber-100 text-amber-600'
-                    : playback.isPlaying
-                      ? 'bg-red-100 text-red-600'
-                      : 'bg-indigo-600 text-white'
-                }`}
-              >
-                {playback.isPlaying || playback.isCountingIn ? '■' : '▶'}
+                <span className="text-[13px]">▴</span>
+                <span>접기</span>
               </button>
             </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-bold leading-tight truncate">
-                    {(meta.title as string) ?? '악보'}
-                  </p>
-                  <p className="text-[11px] text-gray-400 truncate leading-none mt-0.5">
-                    {meta.artist as string}
-                  </p>
-                </div>
-                {(meta.capo as number) > 0 && (
-                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium shrink-0">
-                    카포 {meta.capo}
-                  </span>
-                )}
-                <button
-                  onClick={() => setShowHelp(true)}
-                  aria-label="도움말"
-                  className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xs font-bold shrink-0"
-                >
-                  ?
-                </button>
-                <button
-                  onClick={() => {
-                    if (!isAuthenticated) {
-                      setLoginToast(true);
-                      setTimeout(() => setLoginToast(false), 2500);
-                      return;
-                    }
-                    setShowSaveModal(true);
-                  }}
-                  aria-label="저장소에 저장"
-                  className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
-                >
-                  ⭐
-                </button>
-                <button
-                  onClick={() => setRoomEnabled((v) => !v)}
-                  aria-label="합주 모드"
-                  title="합주 모드"
-                  className={`w-7 h-7 flex items-center justify-center rounded-full text-sm shrink-0 transition-colors ${
-                    roomEnabled ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  ♪
-                </button>
-                <button
-                  onClick={() => router.push(ROUTES.viewerEdit(songId))}
-                  aria-label="악보 수정"
-                  className="h-7 px-2.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[11px] font-semibold shrink-0"
-                >
-                  수정
-                </button>
-                <button
-                  onClick={() => setHeaderCollapsed(true)}
-                  className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0"
-                >
-                  <span className="text-[13px]">▴</span>
-                  <span>접기</span>
-                </button>
-              </div>
-              <PlaybackControls
-                semitones={semitones}
-                setSemitones={setSemitones}
-                maleSemi={maleSemi}
-                femaleSemi={femaleSemi}
-                currentKey={currentKey}
-                timeSig={timeSig}
-                setTimeSig={setTimeSig}
-                bpm={bpm}
-                setBpm={setBpm}
-                isPlaying={playback.isPlaying}
-                isCountingIn={playback.isCountingIn}
-                onTogglePlay={togglePlay}
-                showNotes={showNotes}
-                setShowNotes={setShowNotes}
-              />
-            </>
-          )}
+            <PlaybackControls
+              semitones={semitones}
+              setSemitones={setSemitones}
+              maleSemi={maleSemi}
+              femaleSemi={femaleSemi}
+              currentKey={currentKey}
+              timeSig={timeSig}
+              setTimeSig={setTimeSig}
+              bpm={bpm}
+              setBpm={setBpm}
+              isPlaying={playback.isPlaying}
+              isCountingIn={playback.isCountingIn}
+              onTogglePlay={togglePlay}
+              showNotes={showNotes}
+              setShowNotes={setShowNotes}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="max-w-2xl mx-auto">
@@ -290,6 +266,14 @@ export default function ViewerClient({ markdown, songId }: Props) {
       {loginToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
           로그인하면 저장할 수 있어요
+        </div>
+      )}
+
+      {roomId && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <span className="text-[10px] text-indigo-400 bg-indigo-50/80 rounded-full px-2.5 py-0.5 font-medium">
+            합주 모드
+          </span>
         </div>
       )}
     </div>

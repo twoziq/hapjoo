@@ -14,6 +14,7 @@ export const ROUTES = {
   myDetail: (id: string) => `/my/${id}`,
   invite: (code: string) => `/invite/${code}`,
   viewer: (id: string) => `/viewer/${id}`,
+  viewerRoom: (id: string, collectionId: string) => `/viewer/${id}?room=${collectionId}`,
   viewerEdit: (id: string) => `/viewer/${id}/edit`,
 } as const;
 

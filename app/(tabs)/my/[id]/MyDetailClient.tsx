@@ -269,7 +269,7 @@ export default function MyDetailClient({ collectionId }: Props) {
             {songs.map((s) => (
               <li key={s.id}>
                 <Link
-                  href={ROUTES.viewer(s.id)}
+                  href={ROUTES.viewerRoom(s.id, collectionId)}
                   prefetch
                   className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 active:bg-gray-50"
                 >
