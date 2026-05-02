@@ -14,6 +14,10 @@ interface Props {
 
 const PAGE_SIZE = 50;
 
+const FOLDER_LABELS: Record<string, string> = {
+  entertain: 'SK엔터',
+};
+
 export default function SongPickerModal({ collectionId, existingSongIds, onClose, onSaved }: Props) {
   const [items, setItems] = useState<SongRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -162,6 +166,11 @@ export default function SongPickerModal({ collectionId, existingSongIds, onClose
                   <div>
                     <p className="font-semibold">{song.title}</p>
                     <p className="text-sm text-gray-400">{song.artist}</p>
+                    {song.folder && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        📁 {FOLDER_LABELS[song.folder] ?? song.folder}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span
