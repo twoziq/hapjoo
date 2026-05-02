@@ -45,14 +45,21 @@ export default function SheetViewer({
   const { notes, saveNote } = useNotes(songId);
 
   const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const prevSiRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!currentPos || !isPlaying) return;
+    if (!isPlaying) {
+      prevSiRef.current = null;
+      return;
+    }
+    if (!currentPos) return;
+    if (prevSiRef.current === currentPos.si) return;
+    prevSiRef.current = currentPos.si;
+
     const os = oSections.find((s) => s.originalIdx === currentPos.si);
     if (!os) return;
-    cellRefs.current
-      .get(`${os.uid}_${currentPos.mi}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    rowRefs.current.get(os.uid)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [currentPos, isPlaying, oSections]);
 
   const blocks = useMemo(() => toBlocks(oSections), [oSections]);
@@ -89,7 +96,14 @@ export default function SheetViewer({
                   const cols = count <= 4 ? count : 4;
 
                   return (
-                    <div key={os.uid} className="flex items-stretch gap-px bg-gray-200">
+                    <div
+                      key={os.uid}
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(os.uid, el);
+                        else rowRefs.current.delete(os.uid);
+                      }}
+                      className="flex items-stretch gap-px bg-gray-200"
+                    >
                       <div
                         className="flex-1 grid gap-px"
                         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
