@@ -20,6 +20,7 @@ import {
   renameCollectionAction,
 } from '../actions';
 import InviteModal from './InviteModal';
+import SongPickerModal from './SongPickerModal';
 
 interface Props {
   collectionId: string;
@@ -44,6 +45,7 @@ export default function MyDetailClient({ collectionId }: Props) {
   const [showInvite, setShowInvite] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [showSongPicker, setShowSongPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -247,12 +249,20 @@ export default function MyDetailClient({ collectionId }: Props) {
       </section>
 
       <section>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-          저장된 곡 ({songs.length})
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+            저장된 곡 ({songs.length})
+          </h2>
+          <button
+            onClick={() => setShowSongPicker(true)}
+            className="text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700"
+          >
+            + 곡 추가
+          </button>
+        </div>
         {songs.length === 0 ? (
           <p className="text-center text-xs text-gray-400 py-8">
-            아직 저장된 곡이 없어요. 곡 뷰어에서 ⭐ 눌러 추가하세요.
+            아직 저장된 곡이 없어요.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -298,6 +308,20 @@ export default function MyDetailClient({ collectionId }: Props) {
 
       {showInvite && (
         <InviteModal collectionId={collection.id} onClose={() => setShowInvite(false)} />
+      )}
+
+      {showSongPicker && (
+        <SongPickerModal
+          collectionId={collection.id}
+          existingSongIds={new Set(songs.map((s) => s.id))}
+          onClose={() => setShowSongPicker(false)}
+          onSaved={(newSongs) => {
+            setData((prev) =>
+              prev ? { ...prev, songs: [...prev.songs, ...newSongs] } : prev,
+            );
+            setShowSongPicker(false);
+          }}
+        />
       )}
 
       {confirmDelete && (

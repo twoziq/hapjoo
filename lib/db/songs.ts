@@ -26,6 +26,19 @@ export async function fetchSongsPage(offset: number, limit: number): Promise<Son
   return { rows: all.slice(0, limit), hasMore: all.length > limit };
 }
 
+export async function fetchAllSongsPage(offset: number, limit: number): Promise<SongsPage> {
+  if (!supabaseConfigured) return { rows: [], hasMore: false };
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('songs')
+    .select('id, title, artist, key, capo, bpm, folder')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit);
+  if (error) throw new Error(`fetchAllSongsPage: ${error.message}`);
+  const all = (data ?? []) as SongRow[];
+  return { rows: all.slice(0, limit), hasMore: all.length > limit };
+}
+
 export async function fetchFolderSongs(folder: string): Promise<SongRow[]> {
   if (!supabaseConfigured) return [];
   const sb = getSupabase();

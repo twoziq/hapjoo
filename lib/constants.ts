@@ -17,7 +17,7 @@ export const ROUTES = {
   viewerEdit: (id: string) => `/viewer/${id}/edit`,
 } as const;
 
-export const ADMIN_EMAIL = 'kshh423@gmail.com';
+export const ADMIN_EMAILS: readonly string[] = ['kshh423@gmail.com', 'kshh423@naver.com'];
 
 export const MUSIC_KEYS = [
   'C',

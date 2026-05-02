@@ -108,6 +108,21 @@ export async function deleteInviteAction(code: string): Promise<ActionResult> {
   }
 }
 
+export async function addSongsToCollectionAction(
+  collectionId: string,
+  songIds: string[],
+): Promise<ActionResult> {
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  if (!songIds.length) return { ok: true };
+  try {
+    await Promise.all(songIds.map((sid) => addSongsToCollections(sid, [collectionId], auth.userId)));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : '저장 실패' };
+  }
+}
+
 export async function saveSongToCollectionsAction(
   songId: string,
   addCollectionIds: string[],
