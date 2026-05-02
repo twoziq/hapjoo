@@ -13,6 +13,7 @@ import HelpModal from './HelpModal';
 import PlaybackControls from './PlaybackControls';
 import { useSemitones } from './hooks/useSemitones';
 import { type FlatMeasure, usePlayback } from './hooks/usePlayback';
+import { useRoomSync } from './hooks/useRoomSync';
 import { type TimeSig } from './types';
 
 interface Props {
@@ -29,6 +30,7 @@ export default function ViewerClient({ markdown, songId }: Props) {
   const [bpmToast, setBpmToast] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [loginToast, setLoginToast] = useState(false);
+  const [roomEnabled, setRoomEnabled] = useState(false);
   const { isAuthenticated } = useSession();
 
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
@@ -51,15 +53,41 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
   const playback = usePlayback({ flatMeasures, bpm, timeSig });
 
+  const { broadcastPlay, broadcastStop } = useRoomSync({
+    songId,
+    enabled: roomEnabled,
+    onRemotePlay: (p) => {
+      setBpm(p.bpm);
+      setTimeSig(p.timeSig as TimeSig);
+      if (playback.isPlaying || playback.isCountingIn) {
+        playback.forceStart(p.playIdx, p.bpm, p.timeSig as TimeSig);
+      } else {
+        playback.seekTo(p.playIdx);
+        playback.start();
+      }
+    },
+    onRemoteStop: () => {
+      playback.stop();
+    },
+  });
+
   // Save last viewed song for tab navigation hints
   useEffect(() => {
     safeSetItem(STORAGE_KEYS.lastSong, songId);
   }, [songId]);
 
   function togglePlay() {
-    if (!playback.isPlaying && !playback.isCountingIn && bpmMissing) {
+    const willStop = playback.isPlaying || playback.isCountingIn;
+    if (!willStop && bpmMissing) {
       setBpmToast(true);
       setTimeout(() => setBpmToast(false), 3000);
+    }
+    if (roomEnabled) {
+      if (willStop) {
+        broadcastStop();
+      } else {
+        broadcastPlay({ playIdx: playback.playIdx, bpm, timeSig });
+      }
     }
     playback.toggle();
   }
@@ -90,6 +118,14 @@ export default function ViewerClient({ markdown, songId }: Props) {
 
       <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
         <div className="max-w-2xl mx-auto px-4 pt-2 pb-2">
+          {roomEnabled && !showBeatBar && (
+            <div className="flex justify-center mb-2">
+              <span className="text-[10px] text-indigo-500 bg-indigo-50 rounded-full px-2.5 py-0.5 font-semibold">
+                합주 모드 — 재생하면 모두에게 공유돼요
+              </span>
+            </div>
+          )}
+
           {showBeatBar && (
             <div className="flex items-center justify-center gap-2 mb-2">
               {Array.from({ length: beatsPerBar }).map((_, i) => {
@@ -152,6 +188,16 @@ export default function ViewerClient({ markdown, songId }: Props) {
               className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
             >
               ✎
+            </button>
+            <button
+              onClick={() => setRoomEnabled((v) => !v)}
+              aria-label="합주 모드"
+              title="합주 모드"
+              className={`w-7 h-7 flex items-center justify-center rounded-full text-sm shrink-0 transition-colors ${
+                roomEnabled ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              ♪
             </button>
             <button
               onClick={() => setHeaderCollapsed(!headerCollapsed)}

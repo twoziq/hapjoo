@@ -22,6 +22,7 @@ export interface PlaybackController {
   stop: () => void;
   toggle: () => void;
   seekTo: (idx: number) => void;
+  forceStart: (idx: number, bpm?: number, timeSig?: TimeSig) => void;
 }
 
 interface Options {
@@ -74,6 +75,22 @@ export function usePlayback({ flatMeasures, bpm, timeSig }: Options): PlaybackCo
   function seekTo(idx: number) {
     playIdxRef.current = idx;
     setPlayIdx(idx);
+  }
+
+  function forceStart(idx: number, forceBpm?: number, forceTimeSig?: TimeSig) {
+    clearBeatTimer();
+    if (forceBpm !== undefined && forceTimeSig !== undefined) {
+      beatsPerBarRef.current = getBeatsPerBar(forceTimeSig);
+      beatIntervalRef.current = getBeatIntervalMs(forceTimeSig, forceBpm);
+    }
+    phaseRef.current = 'playing';
+    playIdxRef.current = idx;
+    setPlayIdx(idx);
+    playBeatCountRef.current = 0;
+    setIsCountingIn(false);
+    setIsPlaying(true);
+    setBeatState({ beat: 0, tick: 1 });
+    scheduleTick();
   }
 
   function scheduleTick() {
@@ -147,5 +164,6 @@ export function usePlayback({ flatMeasures, bpm, timeSig }: Options): PlaybackCo
     stop,
     toggle,
     seekTo,
+    forceStart,
   };
 }
