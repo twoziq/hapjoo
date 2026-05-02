@@ -5,6 +5,7 @@ export interface DbSong {
   key: string;
   capo: number;
   bpm: number;
+  folder?: string | null;
   content: string;
   created_at?: string;
 }
@@ -23,4 +24,5 @@ export interface SongItem {
   title: string;
   artist: string;
   key: string;
+  folder?: string | null;
 }

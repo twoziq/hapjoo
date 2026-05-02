@@ -2,7 +2,7 @@ import { unstable_cache } from 'next/cache';
 import type { DbSong } from '@/types/song';
 import { getSupabase, supabaseConfigured } from '@/lib/supabase/client';
 
-export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm'>;
+export type SongRow = Pick<DbSong, 'id' | 'title' | 'artist' | 'key' | 'capo' | 'bpm' | 'folder'>;
 
 export const SONGS_TAG = 'songs';
 export const SONGS_PAGE_SIZE = 50;
@@ -17,13 +17,32 @@ export async function fetchSongsPage(offset: number, limit: number): Promise<Son
   const sb = getSupabase();
   const { data, error } = await sb
     .from('songs')
-    .select('id, title, artist, key, capo, bpm')
+    .select('id, title, artist, key, capo, bpm, folder')
+    .is('folder', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit);
   if (error) throw new Error(`fetchSongsPage: ${error.message}`);
   const all = (data ?? []) as SongRow[];
   return { rows: all.slice(0, limit), hasMore: all.length > limit };
 }
+
+export async function fetchFolderSongs(folder: string): Promise<SongRow[]> {
+  if (!supabaseConfigured) return [];
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from('songs')
+    .select('id, title, artist, key, capo, bpm, folder')
+    .eq('folder', folder)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`fetchFolderSongs: ${error.message}`);
+  return (data ?? []) as SongRow[];
+}
+
+export const getFolderSongsCached = unstable_cache(
+  fetchFolderSongs,
+  ['folder-songs'],
+  { tags: [SONGS_TAG], revalidate: 60 },
+);
 
 export const getSongsPageCached = unstable_cache(fetchSongsPage, ['songs-page'], {
   tags: [SONGS_TAG],
@@ -42,7 +61,7 @@ export async function searchSongsPage(
   const pat = `%${sanitized}%`;
   const { data, error } = await sb
     .from('songs')
-    .select('id, title, artist, key, capo, bpm')
+    .select('id, title, artist, key, capo, bpm, folder')
     .or(`title.ilike.${pat},artist.ilike.${pat}`)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit);

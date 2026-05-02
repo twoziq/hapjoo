@@ -21,6 +21,7 @@ function rowToItem(s: SongRow): SongItem {
     title: s.title,
     artist: s.artist,
     key: s.key,
+    folder: s.folder,
   };
 }
 

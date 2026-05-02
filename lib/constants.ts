@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
 
 export const ROUTES = {
   songs: '/songs',
+  songsFolder: (folder: string) => `/songs?folder=${encodeURIComponent(folder)}`,
   songsNew: '/songs/new',
   chords: '/chords',
   tuner: '/tuner',
