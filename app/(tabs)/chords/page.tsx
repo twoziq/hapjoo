@@ -1,9 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import chordDB from '@/data/chords.json';
 import DiagramSVG from '@/components/ChordDiagram/DiagramSVG';
 import type { ChordEntry } from '@/components/ChordDiagram/types';
+import { useSession } from '@/lib/hooks/useSession';
+import { supabaseConfigured } from '@/lib/supabase/client';
+import { deleteChord, fetchAllChords, upsertChord } from '@/lib/db/chords';
 
 const ROOTS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
@@ -18,22 +21,85 @@ const TYPES = [
   { suffix: 'aug', label: 'aug' },
 ] as const;
 
-interface DragState {
-  x: number;
-  y: number;
-}
-
+interface DragState { x: number; y: number; }
 const SWIPE_THRESHOLD = 30;
+
+const staticDB = chordDB as Record<string, ChordEntry>;
 
 export default function ChordsPage() {
   const [rootIdx, setRootIdx] = useState(4); // G
   const [typeIdx, setTypeIdx] = useState(0);
+  const [dbChords, setDbChords] = useState<Record<string, ChordEntry>>(staticDB);
+  const { isAdmin, isManager } = useSession();
+
+  const [editMode, setEditMode] = useState(false);
+  const [frets, setFrets] = useState('');
+  const [fingers, setFingers] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const drag = useRef<DragState | null>(null);
 
-  const chordTable = chordDB as Record<string, ChordEntry>;
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    fetchAllChords().then((data) => {
+      if (Object.keys(data).length > 0) setDbChords({ ...staticDB, ...data });
+    });
+  }, []);
+
   const chordName = ROOTS[rootIdx] + TYPES[typeIdx].suffix;
-  const chordData = chordTable[chordName];
+  const chordData = dbChords[chordName];
+
+  useEffect(() => {
+    setEditMode(false);
+    setMsg(null);
+  }, [chordName]);
+
+  function enterEdit() {
+    setFrets(chordData?.frets ?? '');
+    setFingers(chordData?.fingers ?? '');
+    setMsg(null);
+    setEditMode(true);
+  }
+
+  async function handleSave() {
+    if (!/^[x0-9]{6}$/.test(frets)) {
+      setMsg({ ok: false, text: '프렛은 6자리 (x 또는 0-9)로 입력하세요.' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await upsertChord({ name: chordName, frets, fingers: fingers || undefined });
+      setDbChords((prev) => ({
+        ...prev,
+        [chordName]: { ...prev[chordName], frets, fingers: fingers || undefined },
+      }));
+      setMsg({ ok: true, text: '저장 완료!' });
+      setEditMode(false);
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : '저장 실패' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`${chordName} 코드를 삭제할까요?`)) return;
+    setSaving(true);
+    try {
+      await deleteChord(chordName);
+      setDbChords((prev) => {
+        const next = { ...prev };
+        delete next[chordName];
+        return next;
+      });
+      setMsg({ ok: true, text: '삭제 완료!' });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : '삭제 실패' });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function onPointerDown(e: React.PointerEvent) {
     drag.current = { x: e.clientX, y: e.clientY };
@@ -54,9 +120,7 @@ export default function ChordsPage() {
     }
   }
 
-  function onPointerCancel() {
-    drag.current = null;
-  }
+  function onPointerCancel() { drag.current = null; }
 
   return (
     <div className="flex h-full overflow-hidden select-none">
@@ -77,7 +141,7 @@ export default function ChordsPage() {
       </div>
 
       <div
-        className="flex-1 flex flex-col min-w-0 touch-none select-none relative"
+        className="flex-1 flex flex-col min-w-0 touch-none select-none"
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
@@ -99,7 +163,7 @@ export default function ChordsPage() {
           ))}
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3 overflow-y-auto">
           <div className="text-center">
             <h2 className="text-5xl font-black tracking-tight">{chordName}</h2>
             <p className="text-sm text-gray-400 mt-0.5">{TYPES[typeIdx].label}</p>
@@ -128,6 +192,75 @@ export default function ChordsPage() {
             <p className="text-gray-300 text-lg mt-8">{chordName} 코드 데이터 없음</p>
           )}
 
+          {msg && (
+            <p className={`text-xs font-semibold ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>
+              {msg.text}
+            </p>
+          )}
+
+          {isManager && supabaseConfigured && !editMode && (
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={enterEdit}
+                className="px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold"
+              >
+                {chordData ? '편집' : '+ 등록'}
+              </button>
+              {isAdmin && chordData && (
+                <button
+                  onClick={handleDelete}
+                  disabled={saving}
+                  className="px-4 py-1.5 rounded-full bg-red-50 text-red-400 text-xs font-semibold"
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          )}
+
+          {editMode && (
+            <div className="w-full max-w-xs flex flex-col gap-3 mt-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  프렛 (6자리, x=뮤트)
+                </label>
+                <input
+                  value={frets}
+                  onChange={(e) => setFrets(e.target.value.toLowerCase())}
+                  placeholder="예: 320003"
+                  maxLength={6}
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  손가락 (선택, 6자리)
+                </label>
+                <input
+                  value={fingers}
+                  onChange={(e) => setFingers(e.target.value)}
+                  placeholder="예: 210003"
+                  maxLength={6}
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditMode(false); setMsg(null); }}
+                  className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold disabled:opacity-50"
+                >
+                  {saving ? '저장 중…' : '저장'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

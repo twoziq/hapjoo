@@ -9,6 +9,7 @@ import { FEMALE_KEY_OFFSET, transposeNote } from '@/lib/transpose';
 import SheetViewer from '@/components/SheetViewer';
 import SaveToCollectionModal from '@/components/SaveToCollectionModal';
 import { useSession } from '@/lib/hooks/useSession';
+import { deleteSongAction } from '@/app/(tabs)/songs/actions';
 import HelpModal from './HelpModal';
 import PlaybackControls from './PlaybackControls';
 import { useSemitones } from './hooks/useSemitones';
@@ -31,7 +32,8 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
   const [bpmToast, setBpmToast] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [loginToast, setLoginToast] = useState(false);
-  const { isAuthenticated } = useSession();
+  const { isAuthenticated, isAdmin } = useSession();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
 
@@ -119,6 +121,32 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-xs w-full shadow-xl flex flex-col gap-4">
+            <p className="text-sm font-bold text-gray-800">이 악보를 삭제할까요?</p>
+            <p className="text-xs text-gray-400">삭제하면 되돌릴 수 없어요.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  const r = await deleteSongAction(songId);
+                  if (r.ok) router.replace(ROUTES.songs);
+                }}
+                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-bold"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bpmToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
           BPM이 설정되지 않았어요. 100으로 시작합니다.
@@ -214,6 +242,15 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
               >
                 수정
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="악보 삭제"
+                  className="h-7 px-2.5 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-[11px] font-semibold shrink-0"
+                >
+                  삭제
+                </button>
+              )}
               <button
                 onClick={() => setHeaderCollapsed(true)}
                 className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0"
