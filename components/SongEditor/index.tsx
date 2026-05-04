@@ -57,18 +57,17 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
   const editor = useEditorState(data.sections);
   const { sections, setSections } = editor;
 
-  const [showPreview, setShowPreview] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [codeText, setCodeText] = useState('');
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  function enterCode() {
+  function switchToText() {
     setCodeText(generateContent(title, artist, key, gender, capo, bpm, sections));
     setShowCode(true);
   }
 
-  function exitCode() {
+  function switchToGrid() {
     const d = parseCodeToData(codeText);
     setTitle(d.title);
     setArtist(d.artist);
@@ -78,6 +77,17 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
     setBpm(d.bpm);
     setSections(d.sections);
     setShowCode(false);
+  }
+
+  function handleCodeChange(v: string) {
+    setCodeText(v);
+    const { meta } = parseSheet(v);
+    if (meta.title) setTitle(String(meta.title));
+    if (meta.artist) setArtist(String(meta.artist));
+    if (meta.key) setKey(String(meta.key));
+    setGender(String(meta.gender ?? ''));
+    if (meta.capo !== undefined) setCapo(Number(meta.capo));
+    if (meta.bpm !== undefined) setBpm(Number(meta.bpm));
   }
 
   // Section drag
@@ -118,12 +128,11 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
     const rawContent = showCode
       ? codeText
       : generateContent(title, artist, key, gender, capo, bpm, sections);
-    const meta = showCode ? parseSheet(codeText).meta : null;
-    const saveTitle = meta ? String(meta.title ?? '') : title;
-    const saveArtist = meta ? String(meta.artist ?? '') : artist;
-    const saveKey = meta ? String(meta.key ?? 'G') : key;
-    const saveCapo = meta ? Number(meta.capo ?? 0) : capo;
-    const saveBpm = meta ? Number(meta.bpm ?? 80) : bpm;
+    const saveTitle = title;
+    const saveArtist = artist;
+    const saveKey = key;
+    const saveCapo = capo;
+    const saveBpm = bpm;
 
     if (!saveTitle.trim()) {
       setResult({ ok: false, msg: '제목을 입력해주세요.' });
@@ -190,8 +199,7 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
               msg: '악보 텍스트가 클립보드에 복사됐습니다. data/songs/ 폴더에 .txt 파일로 붙여넣어 추가하세요.',
             });
           } catch {
-            setResult({ ok: false, msg: '클립보드 복사 실패. 미리보기에서 직접 복사해주세요.' });
-            setShowPreview(true);
+            setResult({ ok: false, msg: '클립보드 복사 실패. 원문 보기에서 직접 복사해주세요.' });
           }
           return;
         }
@@ -238,8 +246,6 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
     return '저장';
   })();
 
-  const content = generateContent(title, artist, key, gender, capo, bpm, sections);
-
   return (
     <div className="min-h-full bg-gray-50">
       <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
@@ -262,23 +268,13 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
                 ? '악보 추가 요청'
                 : '새 악보 작성'}
           </h1>
-          {!showCode && (
-            <button
-              onClick={() => setShowPreview((p) => !p)}
-              className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
-                showPreview ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-400'
-              }`}
-            >
-              미리보기
-            </button>
-          )}
           <button
-            onClick={showCode ? exitCode : enterCode}
+            onClick={showCode ? switchToGrid : switchToText}
             className={`text-xs px-3 py-1.5 rounded-full font-semibold ${
               showCode ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'
             }`}
           >
-            코드
+            {showCode ? '악보' : '원문'}
           </button>
           <button
             onClick={save}
@@ -303,12 +299,9 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
 
       {showCode && (
         <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col gap-2 h-[calc(100vh-64px)]">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
-            코드 편집 — 수정 후 코드 버튼을 다시 눌러 반영
-          </p>
           <textarea
             value={codeText}
-            onChange={(e) => setCodeText(e.target.value)}
+            onChange={(e) => handleCodeChange(e.target.value)}
             spellCheck={false}
             className="flex-1 bg-gray-900 text-green-300 font-mono text-[13px] leading-relaxed rounded-2xl p-4 outline-none resize-none"
           />
@@ -454,17 +447,6 @@ export default function SongEditorClient({ initialData, editSongId, mode = 'none
           >
             + 구간 추가
           </button>
-
-          {showPreview && (
-            <div className="bg-gray-900 rounded-2xl p-4">
-              <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">
-                생성된 악보 텍스트
-              </p>
-              <pre className="text-[11px] text-green-300 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                {content}
-              </pre>
-            </div>
-          )}
 
           <div className="h-10" />
         </div>

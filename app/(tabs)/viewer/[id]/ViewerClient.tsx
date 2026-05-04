@@ -128,13 +128,6 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
       {headerCollapsed ? (
         <div className="fixed top-3 right-3 z-20 flex items-center gap-2">
           <button
-            onClick={() => setHeaderCollapsed(false)}
-            className="flex items-center gap-1 h-8 px-3 rounded-full bg-white/90 backdrop-blur-sm shadow text-gray-500 text-xs font-semibold border border-gray-200"
-          >
-            <span className="text-[13px]">▾</span>
-            <span>펼치기</span>
-          </button>
-          <button
             onClick={togglePlay}
             aria-label={playback.isPlaying || playback.isCountingIn ? '정지' : '재생'}
             className={`h-8 w-9 flex items-center justify-center rounded-full text-xs font-bold shadow border transition-colors ${
@@ -146,6 +139,13 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
             }`}
           >
             {playback.isPlaying || playback.isCountingIn ? '■' : '▶'}
+          </button>
+          <button
+            onClick={() => setHeaderCollapsed(false)}
+            className="flex items-center gap-1 h-8 px-3 rounded-full bg-white/90 backdrop-blur-sm shadow text-gray-500 text-xs font-semibold border border-gray-200"
+          >
+            <span className="text-[13px]">▾</span>
+            <span>펼치기</span>
           </button>
         </div>
       ) : (

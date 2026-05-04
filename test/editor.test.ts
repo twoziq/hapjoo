@@ -8,7 +8,7 @@ describe('parseSmartChord', () => {
   });
 
   it('splits dotted chord input into 4 cells', () => {
-    expect(parseSmartChord('G.D.Em.Am')).toEqual(['G', 'D', 'EM', 'AM']);
+    expect(parseSmartChord('G.D.Em.Am')).toEqual(['G', 'D', 'Em', 'Am']);
   });
 
   it('parses space-separated chords', () => {
@@ -20,7 +20,7 @@ describe('parseSmartChord', () => {
   });
 
   it('handles partial dotted input (3 chords)', () => {
-    expect(parseSmartChord('G.D.Em')).toEqual(['G', 'D', 'EM', '']);
+    expect(parseSmartChord('G.D.Em')).toEqual(['G', 'D', 'Em', '']);
   });
 });
 

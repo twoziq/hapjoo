@@ -17,31 +17,33 @@ export const emptySection = (name = ''): Section => ({
   rows: [emptyRow()],
 });
 
-const CHORD_RX =
-  /[A-G][b#]?(?:maj7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+|[b#][0-9]+)*(?:\/[A-G][b#]?)?/gi;
+// 대문자 루트 [A-G] 기준으로 코드 경계를 인식. M은 Maj7/M7 품질 수식어라 제외됨.
+const CHORD_PAT =
+  '[A-G][b#]?(?:maj7?|M7?|m7?|7|9|11|13|sus[24]?|dim7?|aug|add[0-9]+|[b#][0-9]+)*(?:\\/[A-G][b#]?)?';
 
-// Smart chord input — split on dots ("G.D.Em.Am") or whitespace ("G D Em Am") → 4 cells.
-// An empty segment means a deliberately blank cell (e.g. "G..D" → ['G','','','D']).
+// Smart chord input — dots ("G.D.Em.Am") 또는 대문자 연속 ("BbDEmAm") → 4 cells.
 export function parseSmartChord(raw: string): string[] | null {
   const val = raw.trim();
   if (!val) return null;
+
   if (val.includes('.')) {
     const parts = val.split('.').slice(0, 4);
+    const segRx = new RegExp('^(' + CHORD_PAT + ')', 'i');
     const result = ['', '', '', ''];
+    let found = 0;
     parts.forEach((p, i) => {
       const seg = p.trim();
       if (!seg) return;
-      const m = seg.match(new RegExp('^(' + CHORD_RX.source + ')', 'i'));
-      if (m) result[i] = normalizeChord(m[1]);
+      const m = seg.match(segRx);
+      if (m) { result[i] = normalizeChord(m[1]); found++; }
     });
-    return result;
+    return found >= 1 ? result : null;
   }
-  const matches = [...val.matchAll(CHORD_RX)].map((m) => m[0]);
+
+  const matches = [...val.matchAll(new RegExp(CHORD_PAT, 'g'))].map((m) => m[0]);
   if (matches.length < 2) return null;
   const result = ['', '', '', ''];
-  matches.slice(0, 4).forEach((c, i) => {
-    result[i] = c;
-  });
+  matches.slice(0, 4).forEach((c, i) => { result[i] = normalizeChord(c); });
   return result;
 }
 

@@ -128,21 +128,6 @@ export default function ChordsPage() {
             <p className="text-gray-300 text-lg mt-8">{chordName} 코드 데이터 없음</p>
           )}
 
-          <div className="absolute bottom-20 left-0 right-0 flex items-center justify-between px-3 pointer-events-none">
-            <div className="flex flex-col items-center gap-0.5 opacity-70">
-              <span className="text-base font-black text-gray-700">↑</span>
-              <span className="text-[10px] font-semibold text-gray-600">근음</span>
-              <span className="text-base font-black text-gray-700">↓</span>
-            </div>
-            <p className="text-[11px] text-gray-500 font-medium">
-              좌우: 코드 타입 &nbsp;·&nbsp; 위아래: 근음
-            </p>
-            <div className="flex items-center gap-1 opacity-70">
-              <span className="text-base font-black text-gray-700">←</span>
-              <span className="text-[10px] font-semibold text-gray-600">타입</span>
-              <span className="text-base font-black text-gray-700">→</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
