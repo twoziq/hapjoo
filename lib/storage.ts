@@ -60,3 +60,30 @@ export function safeGetInt(key: string, fallback: number): number {
   const n = parseInt(raw, 10);
   return Number.isFinite(n) ? n : fallback;
 }
+
+const hasSession = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return typeof window.sessionStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+};
+
+export function safeSessionGetItem(key: string): string | null {
+  if (!hasSession()) return null;
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function safeSessionSetItem(key: string, value: string): void {
+  if (!hasSession()) return;
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}

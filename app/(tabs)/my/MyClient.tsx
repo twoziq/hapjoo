@@ -9,11 +9,12 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import MyCollectionsClient from './MyCollectionsClient';
 import PendingRequests from './PendingRequests';
 import MyRequests from './MyRequests';
+import SongReports from './SongReports';
 
 export default function MyClient() {
   const router = useRouter();
   const search = useSearchParams();
-  const { session, loading, isAuthenticated, isAdmin } = useSession();
+  const { session, loading, isAuthenticated, isAdmin, isManager } = useSession();
   const [authError] = useState<string | null>(() => search.get('auth_error'));
 
   useEffect(() => {
@@ -127,12 +128,21 @@ export default function MyClient() {
         </section>
       )}
 
-      {isAuthenticated && isAdmin && (
+      {isAuthenticated && isManager && (
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
             변경 요청
           </h2>
           <PendingRequests />
+        </section>
+      )}
+
+      {isAuthenticated && isManager && (
+        <section>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            오류 신고
+          </h2>
+          <SongReports />
         </section>
       )}
 

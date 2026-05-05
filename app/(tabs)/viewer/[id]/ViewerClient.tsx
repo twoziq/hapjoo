@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ROUTES, STORAGE_KEYS } from '@/lib/constants';
-import { safeSetItem } from '@/lib/storage';
+import { safeSetItem, safeSessionGetItem, safeSessionSetItem } from '@/lib/storage';
 import { parseSheet } from '@/lib/sheet';
 import { FEMALE_KEY_OFFSET, transposeNote } from '@/lib/transpose';
 import SheetViewer from '@/components/SheetViewer';
 import SaveToCollectionModal from '@/components/SaveToCollectionModal';
 import { useSession } from '@/lib/hooks/useSession';
-import { deleteSongAction } from '@/app/(tabs)/songs/actions';
 import HelpModal from './HelpModal';
 import PlaybackControls from './PlaybackControls';
 import { useSemitones } from './hooks/useSemitones';
@@ -27,13 +26,14 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
   const router = useRouter();
   const [semitones, setSemitones] = useSemitones(songId);
   const [showNotes, setShowNotes] = useState(true);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
+    return safeSessionGetItem(STORAGE_KEYS.headerCollapsed(songId)) === '1';
+  });
   const [showHelp, setShowHelp] = useState(false);
   const [bpmToast, setBpmToast] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [loginToast, setLoginToast] = useState(false);
-  const { isAuthenticated, isAdmin } = useSession();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { isAuthenticated } = useSession();
 
   const { meta, sections } = useMemo(() => parseSheet(markdown), [markdown]);
 
@@ -77,6 +77,11 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
     safeSetItem(STORAGE_KEYS.lastSong, songId);
   }, [songId]);
 
+  function collapseHeader(collapsed: boolean) {
+    setHeaderCollapsed(collapsed);
+    safeSessionSetItem(STORAGE_KEYS.headerCollapsed(songId), collapsed ? '1' : '0');
+  }
+
   function togglePlay() {
     const willStop = playback.isPlaying || playback.isCountingIn;
     if (!willStop && bpmMissing) {
@@ -119,34 +124,24 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
     return '';
   }, [sections, currentPos]);
 
+  const playBtn = (
+    <button
+      onClick={togglePlay}
+      aria-label={playback.isPlaying || playback.isCountingIn ? '정지' : '재생'}
+      className={`h-8 w-9 flex items-center justify-center rounded-full text-xs font-bold shadow border transition-colors ${
+        playback.isCountingIn
+          ? 'bg-amber-100 text-amber-600 border-amber-200'
+          : playback.isPlaying
+            ? 'bg-red-100 text-red-600 border-red-200'
+            : 'bg-indigo-600 text-white border-indigo-600'
+      }`}
+    >
+      {playback.isPlaying || playback.isCountingIn ? '■' : '▶'}
+    </button>
+  );
+
   return (
     <div className="flex flex-col h-full">
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl p-6 mx-4 max-w-xs w-full shadow-xl flex flex-col gap-4">
-            <p className="text-sm font-bold text-gray-800">이 악보를 삭제할까요?</p>
-            <p className="text-xs text-gray-400">삭제하면 되돌릴 수 없어요.</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold"
-              >
-                취소
-              </button>
-              <button
-                onClick={async () => {
-                  const r = await deleteSongAction(songId);
-                  if (r.ok) router.replace(ROUTES.songs);
-                }}
-                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-bold"
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {bpmToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none">
           BPM이 설정되지 않았어요. 100으로 시작합니다.
@@ -154,27 +149,50 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
       )}
 
       {headerCollapsed ? (
-        <div className="fixed top-3 right-3 z-20 flex items-center gap-2">
-          <button
-            onClick={togglePlay}
-            aria-label={playback.isPlaying || playback.isCountingIn ? '정지' : '재생'}
-            className={`h-8 w-9 flex items-center justify-center rounded-full text-xs font-bold shadow border transition-colors ${
-              playback.isCountingIn
-                ? 'bg-amber-100 text-amber-600 border-amber-200'
-                : playback.isPlaying
-                  ? 'bg-red-100 text-red-600 border-red-200'
-                  : 'bg-indigo-600 text-white border-indigo-600'
-            }`}
-          >
-            {playback.isPlaying || playback.isCountingIn ? '■' : '▶'}
-          </button>
-          <button
-            onClick={() => setHeaderCollapsed(false)}
-            className="flex items-center gap-1 h-8 px-3 rounded-full bg-white/90 backdrop-blur-sm shadow text-gray-500 text-xs font-semibold border border-gray-200"
-          >
-            <span className="text-[13px]">▾</span>
-            <span>펼치기</span>
-          </button>
+        <div className="fixed top-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+          <div className="max-w-2xl mx-auto h-11 flex items-center gap-2 px-3">
+            <button
+              onClick={() => router.back()}
+              aria-label="뒤로가기"
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
+            >
+              ←
+            </button>
+
+            {currentSectionLabel ? (
+              <span className="text-xs text-gray-500 font-medium truncate flex-1 min-w-0">
+                {currentSectionLabel}
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
+
+            <button
+              onClick={() => setSemitones((s) => s - 1)}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-xs font-bold shrink-0"
+            >
+              −
+            </button>
+            <span className="text-sm font-black text-indigo-600 w-6 text-center shrink-0">
+              {currentKey}
+            </span>
+            <button
+              onClick={() => setSemitones((s) => s + 1)}
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-xs font-bold shrink-0"
+            >
+              +
+            </button>
+
+            {playBtn}
+
+            <button
+              onClick={() => collapseHeader(false)}
+              className="flex items-center gap-1 h-8 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0"
+            >
+              <span className="text-[13px]">▾</span>
+              <span>펼치기</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
@@ -201,6 +219,13 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
             )}
 
             <div className="flex items-center gap-1.5 mb-1.5">
+              <button
+                onClick={() => router.back()}
+                aria-label="뒤로가기"
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-sm shrink-0"
+              >
+                ←
+              </button>
               <div className="flex-1 min-w-0">
                 <p className="text-base font-bold leading-tight truncate">
                   {(meta.title as string) ?? '악보'}
@@ -242,17 +267,8 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
               >
                 수정
               </button>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  aria-label="악보 삭제"
-                  className="h-7 px-2.5 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-[11px] font-semibold shrink-0"
-                >
-                  삭제
-                </button>
-              )}
               <button
-                onClick={() => setHeaderCollapsed(true)}
+                onClick={() => collapseHeader(true)}
                 className="flex items-center gap-1 h-7 px-2.5 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold shrink-0"
               >
                 <span className="text-[13px]">▴</span>
@@ -279,7 +295,7 @@ export default function ViewerClient({ markdown, songId, roomId }: Props) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className={`flex-1 overflow-y-auto px-4 py-4 ${headerCollapsed ? 'pt-14' : ''}`}>
         <div className="max-w-2xl mx-auto">
           <SheetViewer
             sections={sections}

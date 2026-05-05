@@ -2,6 +2,8 @@ export const STORAGE_KEYS = {
   lastSong: 'hapjoo_lastSong',
   semitones: (id: string) => `hapjoo_semi_${id}`,
   notes: (id: string) => `hapjoo_notes_${id}`,
+  headerCollapsed: (id: string) => `hapjoo_collapsed_${id}`,
+  songsScroll: 'hapjoo_songs_scroll',
 } as const;
 
 export const ROUTES = {

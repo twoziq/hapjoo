@@ -7,6 +7,7 @@ import {
   insertChangeRequest,
   rejectRequest,
 } from '@/lib/db/songChangeRequests';
+import { insertSongReport } from '@/lib/db/songReports';
 import { revalidateSongDetail, revalidateSongsList } from './revalidate';
 
 export type SongInput = Omit<DbSong, 'created_at'>;
@@ -55,6 +56,21 @@ export async function deleteSongAction(id: string): Promise<ActionResult> {
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : '삭제 실패' };
+  }
+}
+
+export async function reportSongAction(
+  songId: string,
+  title: string,
+  reason: string,
+): Promise<ActionResult> {
+  const auth = await requireUserId();
+  if (!auth.ok) return auth;
+  try {
+    await insertSongReport({ songId, reporterId: auth.userId, title, reason });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : '신고 실패' };
   }
 }
 
